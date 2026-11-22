@@ -57,7 +57,7 @@ Browser mode serves until Ctrl-C. The URL hash keeps the selected run and step a
 
 [Watch the 33-second demo with sound](docs/demo.mp4) · [View the record/replay terminal output](docs/terminal.png)
 
-Demo music: [“Ethernight Club”](https://incompetech.com/music/royalty-free/index.html?isrc=USUAN2100002) by Kevin MacLeod (incompetech.com), licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/); excerpted, equalized, faded and mixed. Interface sounds by [Kenney.nl](https://kenney.nl/assets/interface-sounds), [CC0](https://creativecommons.org/publicdomain/zero/1.0/).
+Demo music: “Music” by [underscores](https://underscores.bandcamp.com/track/music), excerpted from 0:37 and mixed. Interface sounds by [Kenney.nl](https://kenney.nl/assets/interface-sounds), [CC0](https://creativecommons.org/publicdomain/zero/1.0/).
 
 To try it without API keys:
 
