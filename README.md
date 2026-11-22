@@ -80,7 +80,7 @@ tracelane ui --browser --port 7480
 
 By default, the `desktop` feature opens a native OS webview (not Electron) backed by an in-process server on a random loopback port. Closing the window shuts down the server. `--port` overrides the port; `--browser` prints the URL and serves until Ctrl-C, defaulting to port 7480. Builds with `--no-default-features` always use this browser-only behavior. Select a step to see file diffs and model I/O; use `j` and `k` to move between steps, or toggle Raw JSON for full payloads. The URL hash keeps the selected run and step across reloads. All assets are embedded in the binary.
 
-Random native ports have separate browser-storage origins; pass a fixed `--port` to keep the same origin across launches.
+Native windows serve the UI and API through a stable `tracelane` custom-protocol origin, keeping settings and pane widths across launches even when the underlying loopback port changes.
 
 ![Trace inspector showing a fork, a cached first step, and a multiline Rust diff](docs/ui.png)
 

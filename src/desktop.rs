@@ -9,6 +9,50 @@ use tao::{
 };
 use wry::WebViewBuilder;
 
+#[cfg(target_os = "windows")]
+const ORIGIN: &str = "http://tracelane.localhost/";
+#[cfg(not(target_os = "windows"))]
+const ORIGIN: &str = "tracelane://localhost/";
+
+async fn protocol_response(
+    addr: SocketAddr,
+    request: wry::http::Request<Vec<u8>>,
+) -> wry::http::Response<Vec<u8>> {
+    let origin: wry::http::Uri = ORIGIN.parse().unwrap();
+    if request.uri().scheme() != origin.scheme() || request.uri().authority() != origin.authority()
+    {
+        return wry::http::Response::builder()
+            .status(403)
+            .body(Vec::new())
+            .unwrap();
+    }
+    let result: Result<_> = async {
+        let client = reqwest::Client::builder()
+            .no_proxy()
+            .redirect(reqwest::redirect::Policy::none())
+            .build()?;
+        let path = request
+            .uri()
+            .path_and_query()
+            .map_or("/", |path| path.as_str());
+        let response = client
+            .request(request.method().clone(), format!("http://{addr}{path}"))
+            .body(request.into_body())
+            .send()
+            .await?;
+        let mut builder = wry::http::Response::builder().status(response.status());
+        *builder.headers_mut().unwrap() = response.headers().clone();
+        Ok(builder.body(response.bytes().await?.to_vec())?)
+    }
+    .await;
+    result.unwrap_or_else(|_| {
+        wry::http::Response::builder()
+            .status(502)
+            .body(b"Inspector unavailable".to_vec())
+            .unwrap()
+    })
+}
+
 pub fn open_window(addr: SocketAddr) -> Result<()> {
     let mut event_loop = EventLoop::new();
     let window = WindowBuilder::new()
@@ -16,10 +60,15 @@ pub fn open_window(addr: SocketAddr) -> Result<()> {
         .with_inner_size(LogicalSize::new(1440.0, 900.0))
         .with_min_inner_size(LogicalSize::new(1000.0, 600.0))
         .build(&event_loop)?;
-    let origin = format!("http://{addr}/");
+    let runtime = tokio::runtime::Handle::current();
     let builder = WebViewBuilder::new()
-        .with_url(&origin)
-        .with_navigation_handler(move |url| url.starts_with(&origin))
+        .with_asynchronous_custom_protocol("tracelane".into(), move |_, request, responder| {
+            runtime.spawn(async move {
+                responder.respond(protocol_response(addr, request).await);
+            });
+        })
+        .with_url(ORIGIN)
+        .with_navigation_handler(|url| url.starts_with(ORIGIN))
         .with_new_window_req_handler(|_, _| wry::NewWindowResponse::Deny);
     #[cfg(any(target_os = "windows", target_os = "macos"))]
     let _webview = builder.build(&window)?;
@@ -41,4 +90,68 @@ pub fn open_window(addr: SocketAddr) -> Result<()> {
         }
     });
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn protocol_serves_ui_and_api_from_the_same_origin() {
+        let dir = tempfile::tempdir().unwrap();
+        let server = crate::ui::start_ui(dir.path(), 0).await.unwrap();
+        for path in ["/", "/api/runs", "/api/workspace", "/api/missing"] {
+            let response = protocol_response(
+                server.addr,
+                wry::http::Request::builder()
+                    .uri(format!("{ORIGIN}{}", &path[1..]))
+                    .body(Vec::new())
+                    .unwrap(),
+            )
+            .await;
+            assert_eq!(
+                response.status().as_u16(),
+                if path == "/api/missing" { 404 } else { 200 }
+            );
+            if path == "/api/runs" {
+                assert_eq!(response.body(), b"[]");
+            }
+            if path == "/api/workspace" {
+                let data: serde_json::Value = serde_json::from_slice(response.body()).unwrap();
+                assert_eq!(data["path"], dir.path().to_str().unwrap());
+            }
+        }
+        server.shutdown().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn protocol_rejects_external_origins_and_reports_a_stopped_server() {
+        let dir = tempfile::tempdir().unwrap();
+        let server = crate::ui::start_ui(dir.path(), 0).await.unwrap();
+        let addr = server.addr;
+        for uri in [
+            "https://example.com/api/runs",
+            "tracelane://localhost.evil/api/runs",
+        ] {
+            let response = protocol_response(
+                addr,
+                wry::http::Request::builder()
+                    .uri(uri)
+                    .body(Vec::new())
+                    .unwrap(),
+            )
+            .await;
+            assert_eq!(response.status(), 403);
+        }
+        server.shutdown().await.unwrap();
+        let response = protocol_response(
+            addr,
+            wry::http::Request::builder()
+                .uri(ORIGIN)
+                .body(Vec::new())
+                .unwrap(),
+        )
+        .await;
+        assert_eq!(response.status(), 502);
+    }
 }
