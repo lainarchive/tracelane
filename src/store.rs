@@ -4,8 +4,9 @@ use sha2::{Digest, Sha256};
 use std::{
     collections::BTreeMap,
     fs,
-    io::Write,
+    io::{self, Read},
     path::{Component, Path, PathBuf},
+    sync::atomic::{AtomicU64, Ordering},
 };
 use walkdir::WalkDir;
 
@@ -13,8 +14,70 @@ pub struct Store {
     pub root: PathBuf,
     pub db: Connection,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn failed_blob_copy_does_not_publish_partial_content() {
+        struct FailingReader(bool);
+        impl std::io::Read for FailingReader {
+            fn read(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
+                if self.0 {
+                    return Err(std::io::Error::other("copy interrupted"));
+                }
+                self.0 = true;
+                buffer[..4].copy_from_slice(b"part");
+                Ok(4)
+            }
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let sha = hash(b"partial content");
+        assert!(write_blob(dir.path(), &sha, FailingReader(false)).is_err());
+        assert!(!dir.path().join(&sha).exists());
+        assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 0);
+        write_blob(dir.path(), &sha, b"partial content".as_slice()).unwrap();
+        assert_eq!(fs::read(dir.path().join(&sha)).unwrap(), b"partial content");
+        write_blob(dir.path(), &sha, FailingReader(false)).unwrap();
+        assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 1);
+    }
+}
 pub fn hash(bytes: &[u8]) -> String {
     hex::encode(Sha256::digest(bytes))
+}
+fn write_blob(blobs: &Path, sha: &str, mut contents: impl Read) -> io::Result<()> {
+    let destination = blobs.join(sha);
+    if destination.try_exists()? {
+        return Ok(());
+    }
+    static NEXT_TEMP: AtomicU64 = AtomicU64::new(0);
+    let (temporary, mut file) = loop {
+        let path = blobs.join(format!(
+            ".tmp-{}-{}",
+            std::process::id(),
+            NEXT_TEMP.fetch_add(1, Ordering::Relaxed)
+        ));
+        match fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+        {
+            Ok(file) => break (path, file),
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => continue,
+            Err(error) => return Err(error),
+        }
+    };
+    let result = (|| {
+        io::copy(&mut contents, &mut file)?;
+        file.sync_all()?;
+        drop(file);
+        fs::rename(&temporary, destination)
+    })();
+    if result.is_err() {
+        let _ = fs::remove_file(temporary);
+    }
+    result
 }
 pub fn workspace_entries(root: &Path) -> impl Iterator<Item = walkdir::Result<walkdir::DirEntry>> {
     WalkDir::new(root).into_iter().filter_entry(|e| {
@@ -66,15 +129,7 @@ CREATE TABLE IF NOT EXISTS steps(run_id TEXT, step_index INTEGER, method TEXT, p
                 .to_owned();
             let bytes = fs::read(entry.path())?;
             let sha = hash(&bytes);
-            match fs::OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(self.root.join(".tracelane/blobs").join(&sha))
-            {
-                Ok(mut file) => file.write_all(&bytes)?,
-                Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
-                Err(e) => return Err(e.into()),
-            }
+            write_blob(&self.root.join(".tracelane/blobs"), &sha, bytes.as_slice())?;
             files.insert(path, sha);
         }
         let manifest = files
