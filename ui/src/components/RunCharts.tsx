@@ -262,10 +262,12 @@ export function MetroTimeline({
       : [current];
   const main = waterfall(parent.steps.map((s) => s.latency_ms));
   const tracks = branches.map((branch) => {
-    const fork = parent.steps.findIndex((s) => s.step_index === branch.run.forked_from_step);
-    const base = main.spans[Math.max(0, fork)]?.start ?? 0;
-    const steps = branch.steps.filter((s) => s.step_index >= (branch.run.forked_from_step ?? 1));
-    return { branch, base, steps, time: waterfall(steps.map((s) => s.latency_ms)) };
+    const live = branch.steps.findIndex((step) => !step.cached);
+    const steps = live < 0 ? [] : branch.steps.slice(live);
+    const prefix = live < 0 ? branch.steps : branch.steps.slice(0, live);
+    const fork = parent.steps.findIndex((step) => step.step_index === steps[0]?.step_index);
+    const base = main.spans[fork]?.start ?? main.total;
+    return { branch, base, steps, prefix, time: waterfall(steps.map((s) => s.latency_ms)) };
   });
   const total = Math.max(main.total, ...tracks.map((t) => t.base + t.time.total), 0);
   const x = (value: number) => 100 + (value / (total || 1)) * 1020;
@@ -340,7 +342,7 @@ export function MetroTimeline({
         </text>
         <path d={`M100 36 H1120`} stroke="var(--input)" strokeWidth="2" />
         {parent.steps.map((step, index) => node(parent, step, main.spans[index].end, 36))}
-        {tracks.map(({ branch, base, steps, time }, index) => {
+        {tracks.map(({ branch, base, steps, prefix, time }, index) => {
           const y = 68 + index * 32;
           return (
             <g key={branch.run.id}>
@@ -353,16 +355,12 @@ export function MetroTimeline({
                 strokeWidth="1.5"
                 fill="none"
               />
-              {branch.steps
-                .filter(
-                  (step) => step.cached && step.step_index < (branch.run.forked_from_step ?? 1),
-                )
-                .map((step) => {
-                  const parentIndex = parent.steps.findIndex(
-                    (original) => original.step_index === step.step_index,
-                  );
-                  return node(branch, step, main.spans[parentIndex]?.end ?? base, y);
-                })}
+              {prefix.map((step) => {
+                const parentIndex = parent.steps.findIndex(
+                  (original) => original.step_index === step.step_index,
+                );
+                return node(branch, step, main.spans[parentIndex]?.end ?? base, y);
+              })}
               {steps.map((step, i) => node(branch, step, base + time.spans[i].end, y))}
             </g>
           );

@@ -80,3 +80,29 @@ test('empty timelines have an explicit state instead of an empty chart', () => {
   );
   expect(screen.getByText(/No requests recorded/)).toBeTruthy();
 });
+
+test('a cache miss before the configured fork retains every live node and its latency', () => {
+  const parent = {
+    run: { ...current.run, step_count: 3 },
+    steps: [1, 2, 3].map((step_index) => ({
+      ...current.steps[0],
+      step_index,
+      cached: false,
+      latency_ms: 10,
+    })),
+  };
+  const replay = {
+    run: { ...current.run, id: 'fork', parent_run_id: 'root', forked_from_step: 3, step_count: 3 },
+    steps: [0, 100, 25].map((latency_ms, i) => ({
+      ...current.steps[0],
+      step_index: i + 1,
+      cached: i === 0,
+      latency_ms,
+    })),
+  };
+  render(
+    <MetroTimeline current={replay} related={[parent]} selectedStep={2} onSelect={() => {}} />,
+  );
+  expect(screen.getByRole('button', { name: 'Select fork step 2' })).toBeTruthy();
+  expect(screen.getByText('135ms')).toBeTruthy();
+});
