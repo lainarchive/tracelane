@@ -162,10 +162,23 @@
         display: flex;
         align-items: center;
         flex-shrink: 0;
+        flex-wrap: wrap;
+        min-width: 0;
         gap: 10px;
+        row-gap: 4px;
         min-height: 35px;
-        padding: 0 14px;
+        padding: 6px 14px;
         border-bottom: 1px solid var(--border);
+      }
+      .section-head h2,
+      .section-head > .label {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .section-head > .label {
+        flex: 1;
       }
       .section-head h2 {
         margin: 0;
@@ -516,6 +529,7 @@
         color: var(--red);
       }
       .toggle {
+        flex-shrink: 0;
         font-size: 10px;
         padding: 4px 8px;
         border: 1px solid var(--border);
