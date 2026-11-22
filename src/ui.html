@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tracelane · Trace inspector</title>
+<style>
+:root{color-scheme:dark;--canvas:#0B0D11;--panel:#12151C;--well:#181C25;--border:rgba(255,255,255,0.08);--text:#D6DAE3;--muted:#8A919F;--accent:#5E6AD2}
+*{box-sizing:border-box}body{margin:0;background:var(--canvas);color:var(--text);font:13px -apple-system,"Segoe UI",system-ui,sans-serif;height:100vh;overflow:hidden}button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;text-align:left}button:focus-visible,a:focus-visible{outline:1px solid var(--muted);outline-offset:-2px}button:hover{background:var(--well)}.mono,pre,.number{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-variant-numeric:tabular-nums}.muted{color:var(--muted)}.label{font-size:10px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted)}.ellipsis{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}header{height:48px;display:flex;align-items:center;gap:20px;padding:0 18px;border-bottom:1px solid var(--border)}header strong{font-size:14px;font-weight:600}header .hint{margin-left:auto;color:var(--muted);font-size:12px}.layout{display:grid;grid-template-columns:240px 350px minmax(0,1fr);height:calc(100vh - 48px);gap:1px;background:var(--border)}aside,.timeline,.detail{min-width:0;min-height:0;background:var(--panel)}aside,.timeline{display:flex;flex-direction:column}.section-head{height:42px;min-height:42px;display:flex;align-items:center;gap:12px;padding:0 14px;border-bottom:1px solid var(--border)}.section-head .end{margin-left:auto}.scroll{overflow:auto;min-height:0;flex:1}.run{display:block;width:100%;padding:12px 14px;border-bottom:1px solid var(--border)}.run .command{margin:6px 0;color:var(--muted);font-size:12px}.run .meta{display:flex;gap:10px;color:var(--muted);font-size:11px}.fork{font-size:11px;color:var(--muted);margin-bottom:6px}.active{background:rgba(94,106,210,.12)!important;box-shadow:none;border-left:1px solid var(--accent)}.step{width:100%;display:grid;grid-template-columns:30px minmax(0,1fr) 42px;gap:8px;padding:13px 12px;border-bottom:1px solid var(--border)}.step .number{color:var(--muted);text-align:right}.step .status{text-align:right}.step .metrics{display:flex;gap:12px;margin-top:8px;font-size:11px;color:var(--muted)}.detail{display:grid;grid-template-rows:minmax(0,3fr) minmax(0,2fr)}.pane{display:flex;flex-direction:column;min-height:0;min-width:0}.pane+.pane{border-top:1px solid var(--border)}.diff-body{background:var(--well)}.file{border-bottom:1px solid var(--border)}.file-head{padding:10px 14px;background:var(--panel);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:1}.hunk{padding:7px 14px;color:var(--muted);font-size:11px;border-bottom:1px solid var(--border)}.diff-line{display:grid;grid-template-columns:42px 42px 20px minmax(0,1fr);line-height:21px;min-height:21px;white-space:pre;font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:12px;font-variant-numeric:tabular-nums}.diff-line .ln{color:var(--muted);text-align:right;padding-right:9px;user-select:none;border-right:1px solid var(--border)}.diff-line .sign{text-align:center}.diff-line .code{overflow:hidden;text-overflow:ellipsis;padding-right:12px}.insert{background:rgba(90,173,126,.12);color:#99CDAA}.delete{background:rgba(206,104,112,.12);color:#DFA0A6}.io-body{padding:14px;overflow:auto;background:var(--well);flex:1;min-height:0}pre{font-size:12px;line-height:1.65;white-space:pre-wrap;overflow-wrap:anywhere;margin:7px 0 18px}.raw-toggle{font-size:11px;padding:5px 7px;color:var(--muted);border:1px solid var(--border);border-radius:3px}.empty{padding:22px 14px;color:var(--muted);line-height:1.7}.snapshot{font-size:10px;color:var(--muted)}#notice{color:var(--muted);font-size:12px;max-width:40vw}#run-heading{padding:10px 14px;border-bottom:1px solid var(--border);font-size:11px;color:var(--muted)}[hidden]{display:none!important}@media(max-width:1000px){.layout{grid-template-columns:190px 280px minmax(0,1fr)}.snapshot{display:none}}
+</style>
+</head>
+<body>
+<header><strong>Tracelane</strong><span class="label">Trace inspector</span><span id="notice" role="status" class="ellipsis"></span><span class="hint"><span class="mono">j / k</span> navigate steps</span></header>
+<main class="layout">
+<aside aria-label="Runs"><div class="section-head"><span class="label">Runs</span><span class="end muted number" id="run-count"></span></div><nav id="runs" class="scroll"></nav></aside>
+<section class="timeline" aria-label="Step timeline"><div class="section-head"><span class="label">Steps</span><span id="step-count" class="end muted number"></span></div><div id="run-heading" class="mono ellipsis">Select a run</div><div id="steps" class="scroll"></div></section>
+<section class="detail" aria-label="Step details">
+<section class="pane"><div class="section-head"><span class="label">File Diff</span><span class="snapshot mono end" id="snapshots"></span></div><div id="diff" class="scroll diff-body"><div class="empty">Select a step to inspect workspace changes.</div></div></section>
+<section class="pane"><div class="section-head"><span class="label">Model I/O</span><button id="raw-toggle" class="raw-toggle end" aria-pressed="false">Raw JSON</button></div><div id="io" class="io-body"><div class="muted">Request and response details appear here.</div></div></section>
+</section>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+let runs=[],currentRun=null,currentSteps=[],currentStep=null,detail=null,raw=false,runVersion=0,stepVersion=0;
+function el(tag,className,text){const node=document.createElement(tag);if(className)node.className=className;if(text!==undefined)node.textContent=text;return node}
+async function api(path){const response=await fetch(path);const data=await response.json();if(!response.ok)throw Error(data.error||'Unable to load trace');return data}
+function notice(error){$('notice').textContent=error?error.message:''}
+function empty(node,message){node.replaceChildren(el('div','empty',message))}
+function renderRuns(){
+ $('run-count').textContent=runs.length;$('runs').replaceChildren();const visited=new Set();
+ function append(run,depth){if(visited.has(run.id))return;visited.add(run.id);const button=el('button','run'+(run.id===currentRun?' active':''));button.style.paddingLeft=(14+Math.min(depth,5)*14)+'px';button.setAttribute('aria-current',run.id===currentRun?'true':'false');
+  if(run.parent_run_id)button.append(el('div','fork','fork @ step '+run.forked_from_step));
+  button.append(el('div','mono',run.id));const command=el('div','command ellipsis',run.command);command.title=run.command;button.append(command);
+  const meta=el('div','meta');meta.append(el('span','number',run.step_count+' steps'),el('span','number',run.exit_code===null?'unfinished':'exit '+run.exit_code));button.append(meta);button.onclick=()=>selectRun(run.id);$('runs').append(button);runs.filter(r=>r.parent_run_id===run.id).forEach(r=>append(r,depth+1));
+ }
+ runs.filter(r=>!runs.some(p=>p.id===r.parent_run_id)).forEach(r=>append(r,0));runs.forEach(r=>append(r,0));if(!runs.length)empty($('runs'),'No runs recorded in this workspace.');
+}
+function renderSteps(){
+ $('step-count').textContent=currentSteps.length;$('steps').replaceChildren();
+ for(const step of currentSteps){const button=el('button','step'+(step.step_index===currentStep?' active':''));button.setAttribute('aria-current',step.step_index===currentStep?'step':'false');button.append(el('span','number',String(step.step_index).padStart(2,'0')));const body=el('div');const endpoint=el('div','mono ellipsis',step.endpoint);endpoint.title=step.endpoint;body.append(endpoint);const metrics=el('div','metrics mono');metrics.append(el('span','',step.latency_ms+' ms'),el('span','',`+${step.files.added} ~${step.files.modified} -${step.files.deleted}`));if(step.cached)metrics.append(el('span','','cached'));body.append(metrics);button.append(body,el('span','status number',step.status));button.onclick=()=>selectStep(step.step_index);$('steps').append(button)}
+ if(!currentSteps.length)empty($('steps'),'This run has no recorded steps.');
+}
+function setHash(){const hash=currentRun?encodeURIComponent(currentRun)+(currentStep?'/'+currentStep:''):'';history.replaceState(null,'','#'+hash)}
+async function selectRun(id,requested){
+ const version=++runVersion;++stepVersion;currentRun=id;currentStep=null;currentSteps=[];detail=null;notice();renderRuns();renderSteps();$('run-heading').textContent=id;empty($('diff'),'Loading steps…');$('io').replaceChildren();$('snapshots').textContent='';
+ try{const data=await api('/api/runs/'+encodeURIComponent(id));if(version!==runVersion)return;currentSteps=data.steps;const first=currentSteps.find(s=>s.step_index===requested)||currentSteps[0];if(first)await selectStep(first.step_index);else{renderSteps();empty($('diff'),'No workspace changes to display.');setHash()}}
+ catch(error){if(version===runVersion){notice(error);empty($('diff'),'Unable to load this run.')}}
+}
+async function selectStep(index){
+ const version=++stepVersion;const run=currentRun;currentStep=index;detail=null;notice();setHash();renderSteps();const active=$('steps').querySelector('.active');if(active)active.scrollIntoView({block:'nearest'});empty($('diff'),'Loading diff…');$('io').replaceChildren();const step=currentSteps.find(s=>s.step_index===index);$('snapshots').textContent=step?step.pre_snapshot_id+' → '+step.post_snapshot_id:'';
+ try{const data=await api('/api/runs/'+encodeURIComponent(run)+'/steps/'+index);if(version!==stepVersion||run!==currentRun)return;detail=data;renderDiff();renderIO()}
+ catch(error){if(version===stepVersion){notice(error);empty($('diff'),'Unable to load this step.')}}
+}
+function renderDiff(){
+ $('diff').replaceChildren();for(const file of detail.diffs){const section=el('section','file');const heading=el('div','file-head mono ellipsis',file.path);heading.title=file.path;section.append(heading);if(file.note)section.append(el('div','empty',file.note));for(const hunk of file.hunks){section.append(el('div','hunk mono',hunk.header));for(const line of hunk.lines){const row=el('div','diff-line '+line.kind);row.append(el('span','ln',line.old_line??''),el('span','ln',line.new_line??''),el('span','sign',line.kind==='insert'?'+':line.kind==='delete'?'-':' '));const code=el('span','code',line.text.replace(/\n$/,''));code.title=line.text;row.append(code);section.append(row)}}$('diff').append(section)}if(!detail.diffs.length)empty($('diff'),'No files changed during this request.');$('diff').scrollTop=0;
+}
+function renderIO(){
+ $('raw-toggle').setAttribute('aria-pressed',String(raw));$('raw-toggle').textContent=raw?'Show summary':'Raw JSON';$('io').replaceChildren();if(!detail)return;
+ for(const name of ['request','response']){$('io').append(el('div','label',name),el('pre','',raw?JSON.stringify(detail[name],null,2):detail.summary[name]))}$('io').scrollTop=0;
+}
+$('raw-toggle').onclick=()=>{raw=!raw;renderIO()};
+document.addEventListener('keydown',event=>{if(event.altKey||event.ctrlKey||event.metaKey||/INPUT|TEXTAREA|SELECT/.test(event.target.tagName)||event.target.isContentEditable)return;if(!['j','k'].includes(event.key)||!currentSteps.length)return;event.preventDefault();const index=currentSteps.findIndex(s=>s.step_index===currentStep);const next=Math.max(0,Math.min(currentSteps.length-1,index+(event.key==='j'?1:-1)));if(next!==index)selectStep(currentSteps[next].step_index)});
+function fromHash(){try{const [id,step]=location.hash.slice(1).split('/');const run=runs.find(r=>r.id===decodeURIComponent(id||''))||runs[0];if(run)selectRun(run.id,Number(step))}catch{if(runs[0])selectRun(runs[0].id)}}
+window.addEventListener('hashchange',fromHash);
+api('/api/runs').then(data=>{runs=data;renderRuns();fromHash()}).catch(error=>{notice(error);empty($('runs'),'Unable to load runs.')});
+</script>
+</body>
+</html>

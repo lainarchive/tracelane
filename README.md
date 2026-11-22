@@ -1,41 +1,103 @@
 # Tracelane
 
-Replay failed coding agent runs from any step without starting over.
+Record model HTTP requests with workspace snapshots, inspect file diffs, and replay a run from a chosen step.
 
-Most agent logs tell you what the model *said*, not what the repo looked like when step 14 broke. `tracelane` snapshots the working tree and tool I/O at every step boundary so you can inspect the exact state diff and replay from any checkpoint without re-running steps 1–13.
+## Install
 
-## Quick look
+You need a Rust toolchain and a C compiler for bundled SQLite.
 
 ```bash
-# Run an agent session under tracelane
-$ tracelane record -- npx my-agent "fix flaky auth middleware test"
-[step 01] read   src/auth.ts (142 lines)
-[step 02] edit   src/auth.ts (+18 -6)       snapshot: sha256:9f3a1c
-[step 03] shell  cargo test auth::token     exit 101 (420ms)
-
-# Jump back to step 2, tweak the prompt/tool output, and fork from there
-$ tracelane replay 9f3a1c --from-step 2
+git clone https://github.com/lainarchive/tracelane.git
+cd tracelane
+cargo install --path .
 ```
+
+To build without installing:
+
+```bash
+cargo build --release
+cargo test --all-targets
+cargo clippy --all-targets -- -D warnings
+```
+
+## 10-second demo
+
+```bash
+scripts/demo.sh
+```
+
+The script builds the release binary and examples first. After the build, the demo takes a few seconds and needs no API keys. It uses Bash, `curl`, and the Linux `script` utility, with ports 9900 and 7474 free.
+
+The mock agent writes Rust greeting functions, handles whitespace, and adds a test. The second response uses SSE. The script records all three requests, inspects step 2, then forks from step 2. The mock server prints three hits during recording and only two during replay: step 1 comes from the cache.
+
+The script leaves its temporary workspace in place and prints a command to open it with `tracelane ui`. The mock server stops when the script exits. You can also run `cargo test` inside that workspace to check the generated code.
+
+![Record and replay terminal output, with step 1 cached and steps 2 and 3 live](docs/terminal.png)
+
+## Commands
+
+### Record
+
+```bash
+tracelane record --target https://api.openai.com -- my-command arg
+```
+
+`--port` sets the local proxy port (default 7474). `--target` sets the upstream URL; when omitted, Tracelane uses `TRACELANE_UPSTREAM_URL`, then `https://api.openai.com`.
+
+The child receives `OPENAI_BASE_URL=http://127.0.0.1:<port>/v1` and `ANTHROPIC_BASE_URL=http://127.0.0.1:<port>`. It must honor those variables and supply any authentication headers the upstream requires. Tracelane exits with the child's exit code.
+
+### Inspect
+
+```bash
+tracelane inspect <run-id>
+tracelane inspect <run-id> --step 2
+```
+
+Without `--step`, inspect lists endpoints, status codes, latency, cache use, and added/modified/deleted file counts. `--step` shows unified file diffs and trimmed request/response summaries. Binary and non-UTF8 files get a skip note.
+
+### Replay
+
+```bash
+tracelane replay <run-id> --from-step 2
+tracelane replay <run-id> --from-step 2 --target http://127.0.0.1:9900 -- my-command
+```
+
+`--from-step` is required and starts at 1. Replay restores the selected step's pre-request snapshot. Without a command, it stops after restoring files. With a command, it creates a fork linked to the parent run. Requests before the selected step use the parent's cached responses; requests from that step onward go upstream.
+
+`--port` defaults to 7474. `--target` uses the same environment/default fallback as record; it does not inherit the parent's upstream URL.
+
+Replay overwrites modified files and deletes non-ignored files absent from the snapshot. Save unrecorded work before running it.
+
+### UI
+
+```bash
+tracelane ui --port 7480
+```
+
+Open `http://127.0.0.1:7480`. The sidebar groups forks under their parents. Select a step to see file diffs and model I/O; use `j` and `k` to move between steps, or toggle Raw JSON for full payloads. The URL hash keeps the selected run and step across reloads. All assets are embedded in the binary.
+
+![Trace inspector showing a fork, a cached first step, and a multiline Rust diff](docs/ui.png)
 
 ## How it works
 
-- **Step-level filesystem snapshots**: Captures lightweight content-addressed tree diffs between tool calls instead of copying the whole workspace.
-- **Append-only trace log**: Tool args, stdout/stderr, exit codes, and model payloads write to a local SQLite WAL file for fast diffing.
-- **Deterministic replay**: Rehydrates the workspace to any snapshot hash and stubs prior tool responses so you only pay tokens from the failure point forward.
+The current directory is the workspace. Tracelane binds its proxy to localhost and forwards request methods, paths, query strings, bodies, and headers to the upstream, excluding transport headers such as `Host` and `Content-Length`.
 
-## Run locally
+A mutex serializes requests. Each request takes a pre-snapshot, forwards upstream, buffers the response, then takes a post-snapshot and writes a step to SQLite. JSON bodies are parsed. SSE bodies keep their original text and content type so cached SSE responses retain their bytes.
 
-```bash
-git clone https://github.com/your-org/tracelane.git
-cd tracelane
-cargo run -- --help
-```
+State lives under `.tracelane/`:
 
-## Status
+- `traces.db` uses SQLite WAL and stores runs, fork links, steps, and snapshot manifests.
+- `blobs/<sha256>` stores file contents once per hash. A snapshot ID hashes its sorted manifest, so identical trees share a snapshot.
 
-Early WIP. Working on the Rust snapshot runner and TypeScript SDK wrapper:
+Workspace walks skip `.git`, `target`, `node_modules`, and `.tracelane` at any depth. Restore recreates snapshot files, removes other non-ignored files, and prunes empty directories. Ignored directories remain untouched.
 
-- [x] Minimal HTTP & trace-capture kernel
-- [ ] Content-addressed diff store for step rollbacks
-- [ ] TypeScript SDK hooks for tool call interception
-- [ ] Replay CLI (`tracelane replay <run-id> --from-step <n>`)
+During replay, a cached request must match the recorded JSON body, method, and path. A mismatch prints a warning and disables the remaining cache for that fork. Cached steps still take snapshots and are marked `cached` in the new run.
+
+## Limitations
+
+- Streaming responses are buffered until complete, including SSE.
+- Snapshots capture file contents, not symlinks or permissions. Paths must be UTF-8.
+- Snapshots bracket HTTP requests. Edits made after a response are outside that request's diff. The demo overlaps each local edit with the next request so the diffs contain real file changes; the final test-file write happens after the last response.
+- Cached JSON is reserialized, so whitespace and object-key order may differ from the original response. SSE text is preserved.
+- Replay restores local files and substitutes model responses. It does not undo external side effects from the child command.
+- Payloads and workspace files may contain secrets. Keep `.tracelane/` private and out of version control. The local inspector has no authentication.
