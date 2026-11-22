@@ -1117,6 +1117,14 @@
         request = request || {};
         const messages = [];
         if (request.system) messages.push(messageData({ role: 'system', content: request.system }));
+        if (request.instructions)
+          messages.push(messageData({ role: 'system', content: request.instructions }));
+        if (typeof request.input === 'string')
+          messages.push(messageData({ role: 'user', content: request.input }));
+        for (const item of Array.isArray(request.input) ? request.input : []) {
+          if (item && typeof item === 'object' && 'content' in item)
+            messages.push(messageData({ ...item, role: item.role || 'user' }));
+        }
         for (const message of Array.isArray(request.messages) ? request.messages : [])
           messages.push(messageData(message));
         let model = response?.model || request.model || '';
@@ -1144,8 +1152,18 @@
               warning = 'Some stream events could not be decoded. See Raw for the original body.';
               continue;
             }
-            model = chunk.model || chunk.message?.model || model;
-            Object.assign(usage, chunk.message?.usage, chunk.usage);
+            model = chunk.model || chunk.message?.model || chunk.response?.model || model;
+            Object.assign(usage, chunk.message?.usage, chunk.response?.usage, chunk.usage);
+            if (chunk.type === 'response.output_text.delta' && typeof chunk.delta === 'string')
+              answer.text += chunk.delta;
+            if (
+              ['response.completed', 'response.incomplete', 'response.failed'].includes(chunk.type)
+            ) {
+              finish = chunk.response?.status || chunk.type.slice('response.'.length);
+              if (!answer.text) answer.text = outputText(chunk.response?.output);
+              if (chunk.response?.error)
+                answer.text += JSON.stringify(chunk.response.error, null, 2);
+            }
             const choice = Array.isArray(chunk.choices)
               ? chunk.choices.find((choice) => choice && (choice.index ?? 0) === 0)
               : undefined;
@@ -1182,13 +1200,26 @@
             ? response.choices.find((choice) => choice && (choice.index ?? 0) === 0)
             : undefined;
           answer = messageData(choice?.message || { role: 'assistant', content: response.content });
-          finish = choice?.finish_reason || response.stop_reason || '';
+          if (Array.isArray(response.output)) answer.text = outputText(response.output);
+          finish = choice?.finish_reason || response.stop_reason || response.status || '';
           usage = response.usage || {};
-          if (!answer.text && !answer.tools.length && Object.keys(response).length)
+          if (
+            !answer.text &&
+            !answer.tools.length &&
+            Object.keys(response).length &&
+            (!Array.isArray(response.output) || response.error)
+          )
             answer.text = JSON.stringify(response, null, 2);
         } else if (typeof response === 'string') answer.text = response;
         if (!answer.text && !answer.tools.length) answer.text = 'No assistant text returned.';
         return { messages, response: answer, model, finish, usage, warning };
+      }
+
+      function outputText(output) {
+        return (Array.isArray(output) ? output : [])
+          .map((item) => contentText(item?.content))
+          .filter(Boolean)
+          .join('\n');
       }
 
       function highlightedJson(value) {

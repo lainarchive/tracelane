@@ -122,3 +122,31 @@ test('transcript rendering failures leave the diff and raw rendering available',
     vm.runInContext('renderIO()', state);
     assert.equal(node('io').children.length, 2);
 });
+
+test('Responses API renders instructions, string or message inputs and output text', () => {
+    const output = { model: 'responses-model', status: 'completed', output: [{ type: 'reasoning' }, { type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'The answer.' }] }], usage: { input_tokens: 8, output_tokens: 3 } };
+    const value = parse({ instructions: 'Be brief.', input: 'Question?' }, output);
+    assert.deepEqual(value.messages.map(message => [message.role, message.text]), [['system', 'Be brief.'], ['user', 'Question?']]);
+    assert.equal(value.response.text, 'The answer.');
+    assert.equal(value.model, 'responses-model');
+    assert.equal(value.finish, 'completed');
+    assert.equal(value.usage.output_tokens, 3);
+    const items = parse({ input: [null, { role: 'user', content: [{ type: 'input_text', text: 'First' }] }, { type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'Second' }] }] }, { output: [] });
+    assert.deepEqual(items.messages.map(message => message.text), ['First', 'Second']);
+    assert.equal(items.response.text, 'No assistant text returned.');
+});
+
+test('Responses SSE joins output text deltas and completion metadata without duplicating final output', () => {
+    const events = [
+        { type: 'response.created', response: { model: 'streamed-responses' } },
+        { type: 'response.output_text.delta', delta: 'Hel' },
+        { type: 'response.output_text.delta', delta: 'lo' },
+        { type: 'response.output_text.done', text: 'Hello' },
+        { type: 'response.completed', response: { status: 'completed', output: [{ content: [{ type: 'output_text', text: 'Hello' }] }], usage: { total_tokens: 9 } } },
+    ];
+    const value = parse({ input: 'Question?' }, events.map(event => 'event: ' + event.type + '\ndata: ' + JSON.stringify(event) + '\n\n').join(''));
+    assert.equal(value.response.text, 'Hello');
+    assert.equal(value.model, 'streamed-responses');
+    assert.equal(value.finish, 'completed');
+    assert.equal(value.usage.total_tokens, 9);
+});
