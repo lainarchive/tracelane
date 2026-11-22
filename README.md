@@ -53,9 +53,11 @@ Browser mode serves until Ctrl-C. The URL hash keeps the selected run and step a
 
 ## Demo
 
-[![Ten-second loop: selecting steps in the original and forked runs](docs/hero.gif)](docs/demo.mp4)
+[![Ten-second loop: inspecting a diff, opening a fork and replaying cached then live steps](docs/hero.gif)](docs/demo.mp4)
 
-[Watch the 35-second demo with sound](docs/demo.mp4) · [View the record/replay terminal output](docs/terminal.png)
+[Watch the 33-second demo with sound](docs/demo.mp4) · [View the record/replay terminal output](docs/terminal.png)
+
+Demo music: [“Ethernight Club”](https://incompetech.com/music/royalty-free/index.html?isrc=USUAN2100002) by Kevin MacLeod (incompetech.com), licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/); excerpted, equalized, faded and mixed. Interface sounds by [Kenney.nl](https://kenney.nl/assets/interface-sounds), [CC0](https://creativecommons.org/publicdomain/zero/1.0/).
 
 To try it without API keys:
 
@@ -166,4 +168,4 @@ The tests are headless and don't open native windows.
 
 ## License
 
-[MIT](LICENSE), copyright lainarchive / jaden.
+[MIT](LICENSE) for the code, copyright lainarchive / jaden. Demo audio uses the separate licenses credited above.
