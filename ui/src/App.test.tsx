@@ -158,6 +158,19 @@ test('run filter trims whitespace and matches commands, ids, upstreams and paren
   expect(container.querySelectorAll('#runs .run')).toHaveLength(0);
   expect(container.querySelector('#runs')?.textContent).toContain('No matching runs');
 });
+test('run navigation lives only in the replay rail and the header names the workspace', async () => {
+  mockInspector();
+  history.replaceState(null, '', '#run/1');
+  const { container } = render(<App />);
+  await screen.findByText('02');
+  const nav = screen.getByRole('navigation', { name: 'Recorded runs' });
+  expect(nav.closest('.replay-rail')).toBeTruthy();
+  expect(container.querySelector('.studio-sidebar #runs')).toBeNull();
+  expect(container.querySelectorAll('.lane-label button,button.lane-label')).toHaveLength(0);
+  expect(container.querySelector('.workspace-path')?.textContent).toBe('workspace');
+  expect(container.querySelector('.workspace-path')?.getAttribute('title')).toBe('/workspace');
+  expect(screen.queryByText('Replay Studio')).toBeNull();
+});
 
 test('settings segments and swatches apply and persist appearance and diff preferences', async () => {
   mockInspector();

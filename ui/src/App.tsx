@@ -465,10 +465,11 @@ export default function App() {
             </span>
             <span className="app-slash">/</span>
             <span className="workspace-path ellipsis mono" title={workspace}>
-              {workspace}
+              {workspace
+                .replace(/[\\/]+$/, '')
+                .split(/[\\/]/)
+                .pop() || workspace}
             </span>
-            <span className="app-slash">/</span>
-            <span className="studio-name">Replay Studio</span>
             {runData?.run.id === runId && (
               <details className="run-info">
                 <summary className="mono" title="Run metadata">
@@ -515,6 +516,92 @@ export default function App() {
             stepIndex={stepIndex}
             onSelect={chooseRun}
             onReplay={showReplay}
+            runNavigation={
+              <>
+                <div className="filter-wrap">
+                  <Search size={13} aria-hidden="true" />
+                  <Input
+                    ref={filter}
+                    id="filter"
+                    aria-label="Filter runs"
+                    placeholder="Filter runs…"
+                    value={query}
+                    onChange={(event) => setQuery(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Escape') {
+                        setQuery('');
+                        filter.current?.blur();
+                      }
+                    }}
+                  />
+                </div>
+                <nav id="runs" className="scroll" aria-label="Recorded runs">
+                  {error && (
+                    <div role="alert" className="empty error">
+                      {error} Reload to try again.
+                    </div>
+                  )}
+                  {!runs ? (
+                    !error && <Empty>Loading runs…</Empty>
+                  ) : !tree.ordered.length ? (
+                    <Empty>
+                      {runs.length
+                        ? 'No matching runs. Try another command or run id.'
+                        : 'No runs yet. Record a command in this workspace to get started.'}
+                    </Empty>
+                  ) : (
+                    tree.ordered.map(({ run, depth }) => (
+                      <div
+                        key={run.id}
+                        className="graph-run"
+                        style={{ '--run-depth': Math.min(depth, 4) } as CSSProperties}
+                      >
+                        <button
+                          className={`run ${run.id === runId ? 'active' : ''}`}
+                          aria-current={run.id === runId}
+                          onClick={() => chooseRun(run.id)}
+                        >
+                          <div className="run-id mono">
+                            <span className="run-tree-node" />
+                            <span>{run.id.slice(0, 8)}</span>
+                            <time
+                              className="muted"
+                              dateTime={run.started_at}
+                              title={run.started_at}
+                            >
+                              {settings.timestamps === 'relative'
+                                ? relativeTime(run.started_at)
+                                : new Date(run.started_at).toLocaleTimeString()}
+                            </time>
+                          </div>
+                          <div className="command mono ellipsis" title={run.command}>
+                            {run.display_command}
+                          </div>
+                          <div className="run-meta">
+                            <span>
+                              {run.parent_run_id ? (
+                                <span className="fork-note">
+                                  fork @ step {run.forked_from_step}
+                                </span>
+                              ) : (
+                                `${run.step_count} requests`
+                              )}
+                            </span>
+                            {run.exit_code !== null && (
+                              <span
+                                className={`exit-badge mono ${run.exit_code !== 0 ? 'error' : 'muted'}`}
+                              >
+                                exit {run.exit_code}
+                              </span>
+                            )}
+                          </div>
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </nav>
+              </>
+            }
           />
           <main className="workspace studio-workspace">
             <motion.aside
@@ -522,88 +609,6 @@ export default function App() {
               initial={entrance}
               animate={{ opacity: 1, y: 0 }}
             >
-              <div className="section-head">
-                <h2>Runs</h2>
-                <span className="end muted mono">
-                  {query ? `${tree.matches} / ${runs?.length ?? 0}` : (runs?.length ?? '—')}
-                </span>
-              </div>
-              <div className="filter-wrap">
-                <Search size={13} aria-hidden="true" />
-                <Input
-                  ref={filter}
-                  id="filter"
-                  aria-label="Filter runs"
-                  placeholder="Filter runs…"
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Escape') {
-                      setQuery('');
-                      filter.current?.blur();
-                    }
-                  }}
-                />
-              </div>
-              <nav id="runs" className="scroll" aria-label="Recorded runs">
-                {error && (
-                  <div role="alert" className="empty error">
-                    {error} Reload to try again.
-                  </div>
-                )}
-                {!runs ? (
-                  !error && <Empty>Loading runs…</Empty>
-                ) : !tree.ordered.length ? (
-                  <Empty>
-                    {runs.length
-                      ? 'No matching runs. Try another command or run id.'
-                      : 'No runs yet. Record a command in this workspace to get started.'}
-                  </Empty>
-                ) : (
-                  tree.ordered.map(({ run, depth }) => (
-                    <div
-                      key={run.id}
-                      className="graph-run"
-                      style={{ '--run-depth': Math.min(depth, 4) } as CSSProperties}
-                    >
-                      <button
-                        className={`run ${run.id === runId ? 'active' : ''}`}
-                        aria-current={run.id === runId}
-                        onClick={() => chooseRun(run.id)}
-                      >
-                        <div className="run-id mono">
-                          <span className="run-tree-node" />
-                          <span>{run.id.slice(0, 8)}</span>
-                          <time className="muted" dateTime={run.started_at} title={run.started_at}>
-                            {settings.timestamps === 'relative'
-                              ? relativeTime(run.started_at)
-                              : new Date(run.started_at).toLocaleTimeString()}
-                          </time>
-                        </div>
-                        <div className="command mono ellipsis" title={run.command}>
-                          {run.display_command}
-                        </div>
-                        <div className="run-meta">
-                          <span>
-                            {run.parent_run_id ? (
-                              <span className="fork-note">fork @ step {run.forked_from_step}</span>
-                            ) : (
-                              `${run.step_count} requests`
-                            )}
-                          </span>
-                          {run.exit_code !== null && (
-                            <span
-                              className={`exit-badge mono ${run.exit_code !== 0 ? 'error' : 'muted'}`}
-                            >
-                              exit {run.exit_code}
-                            </span>
-                          )}
-                        </div>
-                      </button>
-                    </div>
-                  ))
-                )}
-              </nav>
               <section className="files-block">
                 <div className="section-head">
                   <h2>Changed files</h2>

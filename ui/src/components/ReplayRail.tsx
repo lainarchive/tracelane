@@ -11,12 +11,14 @@ export function ReplayRail({
   stepIndex,
   onSelect,
   onReplay,
+  runNavigation,
 }: {
   details: RunDetail[];
   runId: string | null;
   stepIndex: number | null;
   onSelect: (id: string, step?: number) => void;
   onReplay: () => void;
+  runNavigation: React.ReactNode;
 }) {
   const reduced = useReducedMotion();
   const layout = railLayout(details, runId ?? '');
@@ -29,11 +31,9 @@ export function ReplayRail({
   }, [runId, layout.lanes.length]);
   return (
     <section className="replay-rail" aria-label="Replay timeline">
+      <div className="run-navigation">{runNavigation}</div>
       <div className="rail-ruler">
-        <div className="rail-heading">
-          <h1>Replay</h1>
-          <span className="muted mono">{layout.lanes.length} runs</span>
-        </div>
+        <div className="rail-heading" aria-hidden="true" />
         <div
           className="time-ruler"
           title="Cumulative request latency; cached clips show reused parent context, not elapsed replay time"
@@ -75,21 +75,7 @@ export function ReplayRail({
               } as React.CSSProperties
             }
           >
-            <button
-              className="lane-label"
-              onClick={() => onSelect(lane.run.id)}
-              title={lane.run.command}
-            >
-              <GitFork size={15} />
-              <span>
-                <strong className="mono">{lane.run.id.slice(0, 8)}</strong>
-                <small>
-                  {lane.run.parent_run_id
-                    ? `fork @ step ${lane.run.forked_from_step}`
-                    : `Original · ${lane.clips.length} requests`}
-                </small>
-              </span>
-            </button>
+            <div className="lane-label" aria-hidden="true" />
             <div className="lane-clips">
               {layout.ticks.map((tick) => (
                 <i
