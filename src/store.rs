@@ -185,12 +185,23 @@ CREATE TABLE IF NOT EXISTS steps(run_id TEXT, step_index INTEGER, method TEXT, p
             }) {
                 return Err("unsafe snapshot path".into());
             }
+            let mut current = self.root.clone();
+            if Path::new(path).components().any(|component| {
+                current.push(component);
+                fs::symlink_metadata(&current)
+                    .is_ok_and(|metadata| metadata.file_type().is_symlink())
+            }) {
+                continue;
+            }
             contents.push((path, self.blob(sha)?));
         }
         let mut dirs = Vec::new();
         for entry in workspace_entries(&self.root) {
             let entry = entry?;
             if entry.depth() == 0 {
+                continue;
+            }
+            if entry.file_type().is_symlink() {
                 continue;
             }
             if entry.file_type().is_dir() {
@@ -201,8 +212,7 @@ CREATE TABLE IF NOT EXISTS steps(run_id TEXT, step_index INTEGER, method TEXT, p
                     .strip_prefix(&self.root)?
                     .to_str()
                     .ok_or("non-UTF8 path")?,
-            ) || entry.file_type().is_symlink()
-            {
+            ) {
                 fs::remove_file(entry.path())?;
             }
         }

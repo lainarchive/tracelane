@@ -91,3 +91,45 @@ fn restore_handles_file_directory_replacements() {
         "file"
     );
 }
+
+#[cfg(unix)]
+#[test]
+fn restore_preserves_symlinks_and_never_writes_through_them() {
+    use std::os::unix::fs::symlink;
+    let dir = tempfile::tempdir().unwrap();
+    let outside = tempfile::tempdir().unwrap();
+    let store = Store::open(dir.path()).unwrap();
+    fs::write(dir.path().join("tracked"), "recorded").unwrap();
+    fs::create_dir(dir.path().join("src")).unwrap();
+    fs::write(dir.path().join("src/lib.rs"), "recorded source").unwrap();
+    let snapshot = store.snapshot().unwrap();
+    fs::remove_file(dir.path().join("tracked")).unwrap();
+    fs::remove_dir_all(dir.path().join("src")).unwrap();
+    fs::write(outside.path().join("file"), "private").unwrap();
+    fs::write(outside.path().join("lib.rs"), "private source").unwrap();
+    symlink(outside.path().join("file"), dir.path().join("tracked")).unwrap();
+    symlink(outside.path(), dir.path().join("src")).unwrap();
+    symlink("missing", dir.path().join("dangling")).unwrap();
+    symlink(outside.path().join("file"), dir.path().join("untracked")).unwrap();
+    store.restore(&snapshot).unwrap();
+    for path in ["tracked", "src", "dangling", "untracked"] {
+        assert!(
+            fs::symlink_metadata(dir.path().join(path))
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        );
+    }
+    assert_eq!(
+        fs::read_to_string(outside.path().join("file")).unwrap(),
+        "private"
+    );
+    assert_eq!(
+        fs::read_to_string(outside.path().join("lib.rs")).unwrap(),
+        "private source"
+    );
+    assert_eq!(
+        fs::read_link(dir.path().join("dangling")).unwrap(),
+        std::path::Path::new("missing")
+    );
+}
