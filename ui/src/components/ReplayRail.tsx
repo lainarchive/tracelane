@@ -2,11 +2,12 @@ import { useEffect, useRef } from 'react';
 import { motion, useReducedMotion } from 'motion/react';
 import { GitFork, ArrowRight, Camera } from 'lucide-react';
 import { railLayout } from '@/lib/studio';
-import type { RunDetail } from '@/lib/types';
+import type { Run, RunDetail } from '@/lib/types';
 import { duration } from '@/lib/format';
 
 export function ReplayRail({
   details,
+  runs,
   runId,
   stepIndex,
   onSelect,
@@ -14,24 +15,50 @@ export function ReplayRail({
   runNavigation,
 }: {
   details: RunDetail[];
+  runs: Run[];
   runId: string | null;
   stepIndex: number | null;
   onSelect: (id: string, step?: number) => void;
   onReplay: () => void;
-  runNavigation: React.ReactNode;
+  runNavigation: (heights: Map<string, number>) => React.ReactNode;
 }) {
   const reduced = useReducedMotion();
-  const layout = railLayout(details, runId ?? '');
+  const byId = new Map(details.map((detail) => [detail.run.id, detail]));
+  const layout = railLayout(
+    runs.map((run) => byId.get(run.id) ?? { run, steps: [] }),
+    runId ?? '',
+    true,
+  );
   const selected = layout.lanes
     .find((lane) => lane.run.id === runId)
     ?.clips.find((clip) => clip.step.step_index === stepIndex);
   const tracks = useRef<HTMLDivElement>(null);
+  const root = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const navigation = root.current?.querySelector<HTMLElement>('#runs');
+    const timeline = tracks.current;
+    if (!navigation || !timeline) return;
+    const fromNavigation = () => {
+      timeline.scrollTop = navigation.scrollTop;
+    };
+    const fromTimeline = () => {
+      navigation.scrollTop = timeline.scrollTop;
+    };
+    navigation.addEventListener('scroll', fromNavigation, { passive: true });
+    timeline.addEventListener('scroll', fromTimeline, { passive: true });
+    return () => {
+      navigation.removeEventListener('scroll', fromNavigation);
+      timeline.removeEventListener('scroll', fromTimeline);
+    };
+  }, []);
   useEffect(() => {
     tracks.current?.querySelector('.replay-lane.selected')?.scrollIntoView({ block: 'nearest' });
-  }, [runId, layout.lanes.length]);
+  }, [runId, layout.lanes.length, layout.height]);
   return (
-    <section className="replay-rail" aria-label="Replay timeline">
-      <div className="run-navigation">{runNavigation}</div>
+    <section ref={root} className="replay-rail" aria-label="Replay timeline">
+      <div className="run-navigation">
+        {runNavigation(new Map(layout.lanes.map((lane) => [lane.run.id, lane.height])))}
+      </div>
       <div className="rail-ruler">
         <div className="rail-heading" aria-hidden="true" />
         <div
@@ -77,6 +104,11 @@ export function ReplayRail({
           >
             <div className="lane-label" aria-hidden="true" />
             <div className="lane-clips">
+              {!lane.clips.length && (
+                <span className="muted mono lane-empty">
+                  {lane.run.step_count ? 'Requests not loaded' : 'No recorded requests'}
+                </span>
+              )}
               {layout.ticks.map((tick) => (
                 <i
                   className="rail-gridline"

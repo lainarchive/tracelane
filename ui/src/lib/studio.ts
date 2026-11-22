@@ -46,7 +46,7 @@ export interface RailLane {
   top: number;
   height: number;
 }
-export function railLayout(details: RunDetail[], selected: string) {
+export function railLayout(details: RunDetail[], selected: string, showAll = false) {
   const byId = new Map(details.map((detail) => [detail.run.id, detail]));
   function root(id: string) {
     const seen = new Set<string>();
@@ -56,7 +56,9 @@ export function railLayout(details: RunDetail[], selected: string) {
     }
     return seen.has(id) ? [...seen].sort()[0] : id;
   }
-  const family = details.filter((detail) => root(detail.run.id) === root(selected));
+  const family = showAll
+    ? details
+    : details.filter((detail) => root(detail.run.id) === root(selected));
   const ordered = runTree(
     family.map((detail) => detail.run),
     '',

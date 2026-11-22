@@ -67,6 +67,13 @@ test('rail tolerates missing parents, invalid latency, cycles and empty data', (
     railLayout([detail('a', 'b', []), detail('b', 'a', [])], 'a').lanes.length,
   ).toBeLessThanOrEqual(2);
 });
+test('merged run navigation includes independent runs and unloaded rows', () => {
+  const all = [detail('a', null, [step(1, 0), step(2, 0)]), detail('b', null, [])];
+  expect(railLayout(all, 'a', true).lanes.map((l) => [l.run.id, l.height])).toEqual([
+    ['a', 86],
+    ['b', 52],
+  ]);
+});
 test('file tree groups paths and aggregates real changes without inventing files', () => {
   const files = [
     { path: 'src/lib.rs', added_lines: 5, deleted_lines: 1 },

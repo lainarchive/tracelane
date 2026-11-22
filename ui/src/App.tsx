@@ -512,11 +512,12 @@ export default function App() {
           </header>
           <ReplayRail
             details={laneDetails}
+            runs={tree.ordered.map(({ run }) => run)}
             runId={runId}
             stepIndex={stepIndex}
             onSelect={chooseRun}
             onReplay={showReplay}
-            runNavigation={
+            runNavigation={(heights) => (
               <>
                 <div className="filter-wrap">
                   <Search size={13} aria-hidden="true" />
@@ -554,11 +555,17 @@ export default function App() {
                       <div
                         key={run.id}
                         className="graph-run"
-                        style={{ '--run-depth': Math.min(depth, 4) } as CSSProperties}
+                        style={
+                          {
+                            '--run-depth': Math.min(depth, 4),
+                            height: heights.get(run.id),
+                          } as CSSProperties
+                        }
                       >
                         <button
                           className={`run ${run.id === runId ? 'active' : ''}`}
                           aria-current={run.id === runId}
+                          title={run.command}
                           onClick={() => chooseRun(run.id)}
                         >
                           <div className="run-id mono">
@@ -601,7 +608,7 @@ export default function App() {
                   )}
                 </nav>
               </>
-            }
+            )}
           />
           <main className="workspace studio-workspace">
             <motion.aside
