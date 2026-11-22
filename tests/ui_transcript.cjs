@@ -8,7 +8,7 @@ const html = fs.readFileSync(path.join(__dirname, '../src/ui.html'), 'utf8');
 const source = html.slice(html.indexOf('function contentText('), html.indexOf('function renderIO()'));
 const context = vm.createContext({});
 vm.runInContext(source, context);
-const parse = (request, response) => JSON.parse(JSON.stringify(context.transcript(request, response)));
+const parse = (request, response, contentType) => JSON.parse(JSON.stringify(context.transcript(request, response, contentType)));
 
 test('OpenAI messages, tool calls, assistant text and usage are retained', () => {
     const value = parse({ model: 'requested', messages: [
@@ -149,4 +149,18 @@ test('Responses SSE joins output text deltas and completion metadata without dup
     assert.equal(value.model, 'streamed-responses');
     assert.equal(value.finish, 'completed');
     assert.equal(value.usage.total_tokens, 9);
+});
+
+test('stored content types distinguish literal data lines from SSE with a legacy fallback', () => {
+    const body = 'Notes\ndata: {"choices":[{"delta":{"content":"not prose"}}]}\n\n';
+    const plain = parse({}, body, 'text/plain; charset=utf-8');
+    assert.equal(plain.response.text, body);
+    assert.equal(plain.warning, '');
+    const stream = 'data: {"choices":[{"delta":{"content":"streamed"}}]}\n\n';
+    assert.equal(parse({}, stream, 'Text/Event-Stream; charset=utf-8').response.text, 'streamed');
+    assert.equal(parse({}, stream).response.text, 'streamed');
+    assert.equal(parse({}, stream, null).response.text, 'streamed');
+    assert.equal(parse({}, stream, 'application/json').response.text, stream);
+    assert.ok(parse({}, 'data: broken\n\n', 'text/event-stream').warning);
+    assert.equal(parse({}, '', 'text/event-stream').response.text, 'No assistant text returned.');
 });

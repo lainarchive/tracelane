@@ -1113,7 +1113,7 @@
         return { role: message.role || 'assistant', text: contentText(message.content), tools };
       }
 
-      function transcript(request, response) {
+      function transcript(request, response, contentType) {
         request = request || {};
         const messages = [];
         if (request.system) messages.push(messageData({ role: 'system', content: request.system }));
@@ -1132,7 +1132,12 @@
           usage = {},
           warning = '';
         let answer = { role: 'assistant', text: '', tools: [] };
-        if (typeof response === 'string' && /^\s*(data:|event:)/m.test(response)) {
+        const stream =
+          contentType == null
+            ? typeof response === 'string' && /^\s*(data:|event:)/m.test(response)
+            : typeof contentType === 'string' &&
+              contentType.split(';')[0].trim().toLowerCase() === 'text/event-stream';
+        if (typeof response === 'string' && stream) {
           const tools = new Map();
           for (const event of response.split(/\r?\n\r?\n/)) {
             const data = event
@@ -1288,7 +1293,11 @@
           return;
         }
         try {
-          const conversation = transcript(detail.request, detail.response);
+          const conversation = transcript(
+            detail.request,
+            detail.response,
+            detail.response_content_type,
+          );
           const meta = [
             conversation.model,
             conversation.finish ? 'finish: ' + conversation.finish : '',

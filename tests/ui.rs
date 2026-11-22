@@ -164,6 +164,7 @@ async fn inspector_serves_run_steps_structured_diff_and_missing_resources() {
         .await
         .unwrap();
     assert_eq!(step["request"]["model"], "test");
+    assert_eq!(step["response_content_type"], "application/json");
     assert_eq!(step["summary"]["response"], "answer");
     let files = step["diffs"].as_array().unwrap();
     assert_eq!(files[0]["note"], "binary file, diff skipped");

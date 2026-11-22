@@ -155,7 +155,7 @@ async fn step(State(state): State<Shared>, Path((id, n)): Path<(String, u32)>) -
         .collect::<std::result::Result<Vec<_>, serde_json::Error>>()
         .map_err(failure)?;
     Ok(Json(
-        json!({"step_index":step.index,"diffs":diffs,"summary":inspect::summary(&step),"request":step.request,"response":step.response}),
+        json!({"step_index":step.index,"diffs":diffs,"summary":inspect::summary(&step),"request":step.request,"response":step.response,"response_content_type":step.response_content_type}),
     ))
 }
 pub fn router(store: Store) -> Router {
