@@ -64,6 +64,21 @@ test('deep-linked requests scroll into view after the timeline has loaded', asyn
   expect(scroll.mock.instances).toContain(selected);
 });
 
+test('an empty workspace finishes loading with zero summary totals', async () => {
+  mockInspector();
+  const original = fetch;
+  vi.stubGlobal('fetch', (path: string) =>
+    path === '/api/runs' ? Promise.resolve({ ok: true, json: async () => [] }) : original(path),
+  );
+  render(<App />);
+  await screen.findByText('No runs yet. Record a command in this workspace to get started.');
+  const summary = screen.getByRole('region', { name: 'Run summary' });
+  await waitFor(() => expect(within(summary).queryByText(/Loading/)).toBeNull());
+  expect(summary.textContent).toContain('0 cached');
+  expect(summary.textContent).toContain('0 live');
+  expect(summary.textContent).toContain('0 ms');
+});
+
 function mockInspector(parentId: string | null = null) {
   const run = {
     id: 'run',

@@ -240,6 +240,11 @@ export default function App() {
     return () => controller.abort();
   }, [runId]);
   useEffect(() => {
+    if (runs?.length === 0) {
+      setRelated([]);
+      setSummaryLoading(false);
+      return;
+    }
     if (
       !runs ||
       runData?.run.id !== runId ||
