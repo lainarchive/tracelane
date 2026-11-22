@@ -1,6 +1,5 @@
 import { useEffect, useRef } from 'react';
 import { motion, useReducedMotion } from 'motion/react';
-import { GitFork, ArrowRight, Camera } from 'lucide-react';
 import { railLayout } from '@/lib/studio';
 import type { Run, RunDetail } from '@/lib/types';
 import { duration } from '@/lib/format';
@@ -11,7 +10,6 @@ export function ReplayRail({
   runId,
   stepIndex,
   onSelect,
-  onReplay,
   runNavigation,
 }: {
   details: RunDetail[];
@@ -19,7 +17,6 @@ export function ReplayRail({
   runId: string | null;
   stepIndex: number | null;
   onSelect: (id: string, step?: number) => void;
-  onReplay: () => void;
   runNavigation: (heights: Map<string, number>) => React.ReactNode;
 }) {
   const reduced = useReducedMotion();
@@ -195,25 +192,6 @@ export function ReplayRail({
             />
           )}
         </div>
-      </div>
-      <div className="rail-transport">
-        <span className="mono">
-          Step {stepIndex === null ? '—' : String(stepIndex).padStart(2, '0')}
-          <span className="muted">
-            {' '}
-            /{' '}
-            {selected?.step.cached ? 'cached' : selected ? duration(selected.step.latency_ms) : '—'}
-          </span>
-        </span>
-        <span className="muted transport-note">
-          <Camera size={12} /> File changes marked at request boundaries
-        </span>
-        <span className="end muted transport-note">Parent-aligned request latency</span>
-        <button className="studio-button" disabled={!selected} onClick={onReplay}>
-          <GitFork size={14} />
-          Replay from here
-          <ArrowRight size={13} />
-        </button>
       </div>
     </section>
   );

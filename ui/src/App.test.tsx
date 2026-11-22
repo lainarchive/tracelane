@@ -172,6 +172,19 @@ test('run navigation lives only in the replay rail and the header names the work
   expect(screen.queryByText('Replay Studio')).toBeNull();
 });
 
+test('replay has one workspace action and run metadata has a named disclosure', async () => {
+  mockInspector();
+  history.replaceState(null, '', '#run/1');
+  const { container } = render(<App />);
+  await screen.findByText('02');
+  expect(screen.getAllByRole('button', { name: /^Replay/ })).toHaveLength(1);
+  expect(container.querySelector('.run-info > summary')?.getAttribute('aria-label')).toBe(
+    'Run metadata',
+  );
+  fireEvent.click(screen.getByRole('button', { name: /^Replay/ }));
+  expect(screen.getByRole('dialog').textContent).toContain('Replay from this step');
+});
+
 test('settings segments and swatches apply and persist appearance and diff preferences', async () => {
   mockInspector();
   history.replaceState(null, '', '#run/1');

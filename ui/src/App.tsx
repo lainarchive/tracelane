@@ -7,6 +7,7 @@ import {
   Camera,
   Command as CommandIcon,
   ChevronLeft,
+  ChevronDown,
   ChevronRight,
   Settings as SettingsIcon,
 } from 'lucide-react';
@@ -472,18 +473,18 @@ export default function App() {
             </span>
             {runData?.run.id === runId && (
               <details className="run-info">
-                <summary className="mono" title="Run metadata">
-                  {runId?.slice(0, 8)}
-                  <span className="muted"> · {runData.run.display_command}</span>
+                <summary className="mono" aria-label="Run metadata" title="Run metadata">
+                  <span className="ellipsis">
+                    {runId?.slice(0, 8)}
+                    <span className="muted"> · {runData.run.display_command}</span>
+                  </span>
+                  <ChevronDown size={12} aria-hidden="true" />
                 </summary>
                 <div className="run-info-content">
                   <RunHeader data={runData} timestamps={settings.timestamps} />
                 </div>
               </details>
             )}
-            <span className="keyboard-hint muted">
-              <kbd>j k</kbd> steps <kbd>[ ]</kbd> runs
-            </span>
             <button
               className="studio-button command-trigger"
               aria-label="Open command menu"
@@ -516,7 +517,6 @@ export default function App() {
             runId={runId}
             stepIndex={stepIndex}
             onSelect={chooseRun}
-            onReplay={showReplay}
             runNavigation={(heights) => (
               <>
                 <div className="filter-wrap">
@@ -808,7 +808,7 @@ export default function App() {
             </span>
             <button className="studio-button" onClick={showReplay} disabled={!currentStep}>
               <GitFork size={13} />
-              Replay
+              Replay from here
             </button>
           </nav>
           <footer className="status-bar mono" aria-label="Run totals">
