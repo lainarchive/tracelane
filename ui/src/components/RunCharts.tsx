@@ -238,6 +238,16 @@ export function WaterfallBar({ steps, index }: { steps: Step[]; index: number })
   );
 }
 
+function nodeRows(positions: number[]) {
+  const ends: number[] = [];
+  return positions.map((position) => {
+    const available = ends.findIndex((end) => position - end >= 76);
+    const row = available < 0 ? ends.length : available;
+    ends[row] = position;
+    return row;
+  });
+}
+
 export function MetroTimeline({
   current,
   related,
@@ -271,8 +281,28 @@ export function MetroTimeline({
   });
   const total = Math.max(main.total, ...tracks.map((t) => t.base + t.time.total), 0);
   const x = (value: number) => 100 + (value / (total || 1)) * 1020;
-  const height = Math.max(88, 68 + tracks.length * 32);
-  function node(run: RunDetail, step: Step, position: number, y: number, cached = step.cached) {
+  const parentRows = nodeRows(main.spans.map((span) => x(span.end)));
+  let nextY = 68 + Math.max(0, ...parentRows) * 32;
+  const layout = tracks.map((track) => {
+    const nodes = [
+      ...track.prefix.map((step) => ({
+        step,
+        position:
+          main.spans[parent.steps.findIndex((original) => original.step_index === step.step_index)]
+            ?.end ?? track.base,
+      })),
+      ...track.steps.map((step, i) => ({ step, position: track.base + track.time.spans[i].end })),
+    ];
+    const rows = nodeRows(nodes.map((node) => x(node.position)));
+    const y = nextY;
+    nextY += (Math.max(0, ...rows) + 1) * 32;
+    const preceding =
+      parent.steps.findIndex((step) => step.step_index === track.steps[0]?.step_index) - 1;
+    return { ...track, nodes, rows, y, fromY: 36 + (parentRows[preceding] ?? 0) * 32 };
+  });
+  const height = Math.max(88, nextY);
+  function node(run: RunDetail, step: Step, position: number, y: number, parentTrack = false) {
+    const cached = step.cached;
     const selected = run.run.id === current!.run.id && step.step_index === selectedStep;
     return (
       <g
@@ -309,9 +339,9 @@ export function MetroTimeline({
           strokeWidth="2"
         />
         <text
-          x={x(position) - (y === 36 ? 12 : 0)}
+          x={x(position) - (parentTrack ? 12 : 0)}
           y={y + 18}
-          textAnchor={y === 36 ? 'end' : 'middle'}
+          textAnchor={parentTrack ? 'end' : 'middle'}
         >
           {step.step_index} · {cached ? 'cached' : `${step.latency_ms}ms`}
         </text>
@@ -341,27 +371,22 @@ export function MetroTimeline({
           {parent.run.id.slice(0, 8)}
         </text>
         <path d={`M100 36 H1120`} stroke="var(--input)" strokeWidth="2" />
-        {parent.steps.map((step, index) => node(parent, step, main.spans[index].end, 36))}
-        {tracks.map(({ branch, base, steps, prefix, time }, index) => {
-          const y = 68 + index * 32;
+        {parent.steps.map((step, index) =>
+          node(parent, step, main.spans[index].end, 36 + parentRows[index] * 32, true),
+        )}
+        {layout.map(({ branch, base, time, nodes, rows, y, fromY }) => {
           return (
             <g key={branch.run.id}>
               <text x="16" y={y + 3} className="metro-fork-label">
                 fork {branch.run.id.slice(0, 6)} @{branch.run.forked_from_step}
               </text>
               <path
-                d={`M${x(base)} 36 Q${x(base)} ${y} ${x(base) + 16} ${y} H${x(base + time.total)}`}
+                d={`M${x(base)} ${fromY} Q${x(base)} ${y} ${x(base) + 16} ${y} H${x(base + time.total)}`}
                 stroke="var(--selection)"
                 strokeWidth="1.5"
                 fill="none"
               />
-              {prefix.map((step) => {
-                const parentIndex = parent.steps.findIndex(
-                  (original) => original.step_index === step.step_index,
-                );
-                return node(branch, step, main.spans[parentIndex]?.end ?? base, y);
-              })}
-              {steps.map((step, i) => node(branch, step, base + time.spans[i].end, y))}
+              {nodes.map(({ step, position }, i) => node(branch, step, position, y + rows[i] * 32))}
             </g>
           );
         })}

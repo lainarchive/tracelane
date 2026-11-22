@@ -81,6 +81,24 @@ test('empty timelines have an explicit state instead of an empty chart', () => {
   expect(screen.getByText(/No requests recorded/)).toBeTruthy();
 });
 
+test('requests with identical end times have separate nonoverlapping hit targets', () => {
+  const select = vi.fn();
+  const data = {
+    ...current,
+    steps: [1, 2, 3].map((step_index) => ({ ...current.steps[0], step_index })),
+  };
+  render(<MetroTimeline current={data} related={[]} selectedStep={2} onSelect={select} />);
+  const targets = screen.getAllByRole('button').map((button) => button.querySelector('rect')!);
+  const positions = targets.map(
+    (target) => `${target.getAttribute('x')}/${target.getAttribute('y')}`,
+  );
+  expect(new Set(positions).size).toBe(3);
+  targets.forEach((target, i) => {
+    fireEvent.click(target);
+    expect(select).toHaveBeenLastCalledWith('root', i + 1);
+  });
+});
+
 test('a cache miss before the configured fork retains every live node and its latency', () => {
   const parent = {
     run: { ...current.run, step_count: 3 },
