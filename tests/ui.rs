@@ -41,6 +41,29 @@ async fn inspector_serves_run_steps_structured_diff_and_missing_resources() {
         .unwrap();
     assert_eq!(recorded["step_count"], 1);
     assert_eq!(recorded["command"], "fixture");
+    let readable = create_run(
+        &store,
+        r#"["cargo","run","--example","mock_agent"]"#,
+        "http://localhost",
+        None,
+    )
+    .unwrap();
+    let list: serde_json::Value = client
+        .get(format!("{base}/api/runs"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(
+        list.as_array()
+            .unwrap()
+            .iter()
+            .find(|r| r["id"] == readable)
+            .unwrap()["command"],
+        "cargo run --example mock_agent"
+    );
     let child = list
         .as_array()
         .unwrap()

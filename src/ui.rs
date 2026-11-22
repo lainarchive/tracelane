@@ -43,7 +43,12 @@ fn runs(store: &Store) -> Result<Vec<Run>> {
                 id: r.get(0)?,
                 parent_run_id: r.get(1)?,
                 forked_from_step: r.get(2)?,
-                command: r.get(3)?,
+                command: {
+                    let command: String = r.get(3)?;
+                    serde_json::from_str::<Vec<String>>(&command)
+                        .map(|args| args.join(" "))
+                        .unwrap_or(command)
+                },
                 started_at: r.get(4)?,
                 exit_code: r.get(5)?,
                 step_count: r.get(6)?,
