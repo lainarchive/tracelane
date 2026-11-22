@@ -58,6 +58,9 @@ export function CommandPalette({
           <div className="replay-command">
             <h2>Replay from this step</h2>
             <p>The UI cannot execute commands. Run this in your workspace terminal.</p>
+            <p className="replay-warning" role="note">
+              Restores the workspace snapshot: overwrites edits and deletes newer non-ignored files.
+            </p>
             <textarea
               aria-label="Replay command"
               readOnly

@@ -980,6 +980,12 @@
     monospace;
   resize: vertical;
 }
+.replay-command p.replay-warning {
+  color: var(--foreground);
+  border-left: 2px solid var(--selection);
+  padding-left: 10px;
+  font-size: 11px;
+}
 .replay-copy {
   display: flex;
   align-items: center;

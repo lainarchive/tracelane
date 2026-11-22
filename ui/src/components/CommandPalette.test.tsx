@@ -4,6 +4,19 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { CommandPalette } from './CommandPalette';
 afterEach(cleanup);
 Element.prototype.scrollIntoView = () => {};
+test('replay warns about overwriting edits and deleting newer non-ignored files', () => {
+  render(
+    <CommandPalette
+      open
+      onOpenChange={() => {}}
+      commands={[]}
+      replay="tracelane replay abc --from-step 2"
+    />,
+  );
+  expect(screen.getByRole('note').textContent).toMatch(
+    /overwrites edits and deletes newer non-ignored files/,
+  );
+});
 
 test('palette filters commands and executes the keyboard-selected result', () => {
   const act = vi.fn();
