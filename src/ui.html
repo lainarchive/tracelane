@@ -18,7 +18,7 @@
         --red: #dfa0a6;
         --amber: #c6b38c;
         --sidebar: 224px;
-        --timeline: 304px;
+        --timeline: 340px;
         --diff-size: 51%;
       }
       * {
@@ -140,7 +140,7 @@
       }
       .workspace {
         display: grid;
-        grid-template-columns: var(--sidebar) 5px minmax(0, 1fr);
+        grid-template-columns: var(--sidebar) 1px minmax(0, 1fr);
         height: calc(100vh - 38px);
       }
       .sidebar,
@@ -226,7 +226,7 @@
         gap: 7px;
         font-size: 11px;
       }
-      .exit-glyph {
+      .exit-code {
         color: var(--muted);
         margin-left: auto;
         font-size: 12px;
@@ -251,23 +251,16 @@
         background: rgba(94, 106, 210, 0.12) !important;
         border-left-color: var(--accent) !important;
       }
-      .sidebar-footer {
-        padding: 12px;
-        border-top: 1px solid var(--border);
-        font-size: 10px;
-        line-height: 1.8;
-        color: var(--muted);
-      }
       .resizer {
         position: relative;
         touch-action: none;
-        background: var(--canvas);
+        background: var(--border);
         z-index: 5;
       }
       .resizer::after {
         content: '';
         position: absolute;
-        background: var(--border);
+        background: transparent;
       }
       .vertical {
         cursor: col-resize;
@@ -275,8 +268,8 @@
       .vertical::after {
         top: 0;
         bottom: 0;
-        left: 2px;
-        width: 1px;
+        left: -3px;
+        width: 7px;
       }
       .horizontal {
         cursor: row-resize;
@@ -284,11 +277,11 @@
       .horizontal::after {
         left: 0;
         right: 0;
-        top: 2px;
-        height: 1px;
+        top: -3px;
+        height: 7px;
       }
-      .resizer:hover::after,
-      .resizer:focus-visible::after {
+      .resizer:hover,
+      .resizer:focus-visible {
         background: var(--accent);
       }
       .inspector {
@@ -340,7 +333,7 @@
       }
       .columns {
         display: grid;
-        grid-template-columns: var(--timeline) 5px minmax(0, 1fr);
+        grid-template-columns: var(--timeline) 1px minmax(0, 1fr);
         min-height: 0;
       }
       #steps {
@@ -350,7 +343,7 @@
         display: grid;
         position: relative;
         width: 100%;
-        grid-template-columns: 23px minmax(0, 1fr) 29px 55px;
+        grid-template-columns: 23px minmax(0, 1fr);
         gap: 1px 7px;
         padding: 4px 10px 3px;
         border-bottom: 1px solid var(--border);
@@ -360,7 +353,6 @@
       }
       .step-index {
         color: var(--muted);
-        grid-row: span 2;
       }
       .endpoint {
         font-size: 11px;
@@ -369,22 +361,33 @@
       .latency {
         text-align: right;
       }
-      .step-counts {
+      .step-footer {
         grid-column: 2 / -1;
         display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .step-counts,
+      .step-metrics {
+        display: flex;
+        align-items: center;
         gap: 9px;
         font-size: 10px;
       }
+      .step-metrics {
+        margin-left: auto;
+      }
+      .latency {
+        min-width: 48px;
+      }
       .latency-track {
-        position: absolute;
-        height: 1px;
-        left: 40px;
-        right: 10px;
-        bottom: 0;
+        width: 48px;
+        height: 2px;
+        background: var(--border);
       }
       .latency-track span {
         display: block;
-        height: 1px;
+        height: 2px;
         background: #596170;
       }
       .live-divider {
@@ -410,7 +413,7 @@
       }
       .detail {
         display: grid;
-        grid-template-rows: minmax(100px, var(--diff-size)) 5px minmax(100px, 1fr);
+        grid-template-rows: minmax(100px, var(--diff-size)) 1px minmax(100px, 1fr);
       }
       .snapshots {
         font-size: 10px;
@@ -585,7 +588,7 @@
       @media (max-width: 1300px) {
         :root {
           --sidebar: 202px;
-          --timeline: 275px;
+          --timeline: 320px;
         }
         .run-header {
           padding: 11px 14px;
@@ -629,9 +632,6 @@
         <nav id="runs" class="scroll" aria-label="Recorded runs">
           <div class="empty">Loading runs…</div>
         </nav>
-        <div class="sidebar-footer">
-          LOCAL WORKSPACE<br />Requests and file changes, side by side.
-        </div>
       </aside>
       <div
         class="resizer vertical"
@@ -788,15 +788,13 @@
           button.setAttribute('aria-current', currentRun === run.id ? 'true' : 'false');
           const title = el('div', 'run-id mono', run.id);
           const failed = run.exit_code !== null && run.exit_code !== 0;
-          const glyph = el(
-            'span',
-            'exit-glyph' + (failed ? ' error' : ''),
-            run.exit_code === null ? '◦' : failed ? '×' : '·',
-          );
-          glyph.title = run.exit_code === null ? 'Running' : 'Exit ' + run.exit_code;
-          glyph.setAttribute('aria-label', glyph.title);
-          title.append(glyph);
-          const command = el('div', 'command ellipsis mono', run.command);
+          if (run.exit_code !== null) {
+            const exit = el('span', 'exit-code mono' + (failed ? ' error' : ''), run.exit_code);
+            exit.title = 'Exit ' + run.exit_code;
+            exit.setAttribute('aria-label', exit.title);
+            title.append(exit);
+          }
+          const command = el('div', 'command ellipsis mono', run.display_command);
           command.title = run.command;
           const meta = el('div', 'run-meta');
           meta.append(
@@ -901,13 +899,6 @@
           button.append(
             el('span', 'step-index', String(step.step_index).padStart(2, '0')),
             endpoint,
-            el(
-              'span',
-              'step-status ' +
-                (step.status >= 400 ? 'error' : step.status >= 300 ? 'warning' : 'muted'),
-              step.status,
-            ),
-            el('span', 'latency muted', step.latency_ms + ' ms'),
           );
           const counts = el('div', 'step-counts');
           counts.append(
@@ -917,10 +908,24 @@
           );
           if (step.cached) counts.append(el('span', 'muted', 'cached'));
           const track = el('div', 'latency-track');
+          track.setAttribute('aria-hidden', 'true');
           const bar = el('span');
           bar.style.width = (step.latency_ms / max) * 100 + '%';
           track.append(bar);
-          button.append(counts, track);
+          const metrics = el('div', 'step-metrics');
+          metrics.append(
+            el(
+              'span',
+              'step-status ' +
+                (step.status >= 400 ? 'error' : step.status >= 300 ? 'warning' : 'muted'),
+              step.status,
+            ),
+            track,
+            el('span', 'latency muted', step.latency_ms + ' ms'),
+          );
+          const footer = el('div', 'step-footer');
+          footer.append(counts, metrics);
+          button.append(footer);
           button.onclick = () => selectStep(step.step_index);
           $('steps').append(button);
         }

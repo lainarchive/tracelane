@@ -72,6 +72,7 @@ async fn inspector_serves_run_steps_structured_diff_and_missing_resources() {
         .unwrap();
     assert_eq!(recorded["step_count"], 1);
     assert_eq!(recorded["command"], "fixture");
+    assert_eq!(recorded["display_command"], "fixture");
     assert_eq!(recorded["target"], "http://localhost");
     assert_eq!(recorded["finished_at"], "2026-11-22T02:00:03Z");
     assert_eq!(recorded["exit_code"], 0);
@@ -106,6 +107,29 @@ async fn inspector_serves_run_steps_structured_diff_and_missing_resources() {
             .find(|r| r["id"] == readable)
             .unwrap()["command"],
         "cargo run --example mock_agent"
+    );
+    let labeled = create_run(
+        &store,
+        r#"["/usr/local/bin/npx","my-agent","fix auth"]"#,
+        "http://localhost",
+        None,
+    )
+    .unwrap();
+    let labeled: serde_json::Value = client
+        .get(format!("{base}/api/runs/{labeled}"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(
+        labeled["run"]["display_command"],
+        r#"npx my-agent "fix auth""#
+    );
+    assert_eq!(
+        labeled["run"]["command"],
+        "/usr/local/bin/npx my-agent fix auth"
     );
     let child = list
         .as_array()
