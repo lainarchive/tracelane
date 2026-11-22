@@ -1,10 +1,30 @@
 // @vitest-environment jsdom
 import { afterEach, expect, test, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { MetroTimeline } from './RunCharts';
+import { MetroTimeline, RunSummary, WaterfallBar } from './RunCharts';
 import type { RunDetail } from '@/lib/types';
 
 afterEach(cleanup);
+test('cached waterfall requests use a labeled fixed tick at their actual start offset', () => {
+  const steps = [
+    { ...current.steps[0], cached: false, latency_ms: 10 },
+    current.steps[0],
+    { ...current.steps[0], cached: false, latency_ms: 10 },
+  ];
+  const { container } = render(<WaterfallBar steps={steps} index={1} />);
+  expect(screen.getByText('cached')).toBeTruthy();
+  expect((container.querySelector('.cached-tick') as HTMLElement).style.left).toBe('50%');
+  expect(container.querySelector('svg')).toBeNull();
+});
+test('summary distinguishes empty data, loading and failed step totals', () => {
+  const { rerender } = render(<RunSummary runs={[]} details={[]} loading={false} />);
+  expect(screen.getByRole('img').getAttribute('aria-label')).toBe('0 cached steps, 0 live steps');
+  rerender(<RunSummary runs={[current.run]} details={[]} loading />);
+  expect(screen.getByText('Loading step totals…')).toBeTruthy();
+  rerender(<RunSummary runs={[current.run]} details={[]} loading={false} />);
+  expect(screen.getByText('Step totals unavailable')).toBeTruthy();
+  expect(screen.queryByRole('img')).toBeNull();
+});
 const current: RunDetail = {
   run: {
     id: 'root',
@@ -36,6 +56,12 @@ test('zero-latency timeline never invents a nonzero time axis and nodes select e
   render(<MetroTimeline current={current} related={[]} selectedStep={1} onSelect={select} />);
   expect(screen.getByText('0ms')).toBeTruthy();
   expect(screen.queryByText('1ms')).toBeNull();
+  expect(
+    screen
+      .getByRole('button', { name: 'Select root step 1' })
+      .querySelector('text')!
+      .getAttribute('text-anchor'),
+  ).toBe('end');
   fireEvent.keyDown(screen.getByRole('button', { name: 'Select root step 1' }), { key: 'Enter' });
   expect(select).toHaveBeenCalledWith('root', 1);
   fireEvent.click(

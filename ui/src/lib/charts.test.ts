@@ -1,5 +1,31 @@
 import { expect, test } from 'vitest';
-import { waterfall, sparklinePath, forkLanes, minimapPositions } from './charts';
+import { waterfall, sparklinePath, forkLanes, minimapPositions, summarizeRuns } from './charts';
+
+test('run summary covers all known runs without duplicating details or treating failed loads as zero', () => {
+  const runs = [
+    { id: 'root', parent_run_id: null },
+    { id: 'fork', parent_run_id: 'root' },
+  ];
+  const root = { run: { id: 'root' }, steps: [{ cached: false, latency_ms: 100 }] };
+  const fork = {
+    run: { id: 'fork' },
+    steps: [
+      { cached: true, latency_ms: 0 },
+      { cached: false, latency_ms: 50 },
+    ],
+  };
+  expect(summarizeRuns(runs, [root, fork, root])).toEqual({
+    runs: 2,
+    forks: 1,
+    steps: { cached: 1, live: 2, latency: 150 },
+  });
+  expect(summarizeRuns([], [])).toEqual({
+    runs: 0,
+    forks: 0,
+    steps: { cached: 0, live: 0, latency: 0 },
+  });
+  expect(summarizeRuns(runs, [root])).toEqual({ runs: 2, forks: 1, steps: null });
+});
 
 test('waterfall uses cumulative request latency, including zero-duration cached requests', () => {
   expect(waterfall([0, 100, 300])).toEqual({

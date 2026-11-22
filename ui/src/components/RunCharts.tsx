@@ -1,7 +1,67 @@
-import { useId } from 'react';
 import { motion, useReducedMotion } from 'motion/react';
-import { forkLanes, sparklinePath, waterfall } from '@/lib/charts';
+import { forkLanes, sparklinePath, summarizeRuns, waterfall } from '@/lib/charts';
 import type { Run, RunDetail, Step } from '@/lib/types';
+
+export function RunSummary({
+  runs,
+  details,
+  loading,
+}: {
+  runs: Run[];
+  details: RunDetail[];
+  loading: boolean;
+}) {
+  const summary = summarizeRuns(runs, details);
+  const steps = summary.steps;
+  const total = steps ? steps.cached + steps.live : 0;
+  return (
+    <section className="run-summary" aria-label="Run summary">
+      <h3 className="label">Run summary</h3>
+      <dl className="summary-counts">
+        <div>
+          <dt>Total runs</dt>
+          <dd className="mono">{summary.runs}</dd>
+        </div>
+        <div>
+          <dt>Forks</dt>
+          <dd className="mono">{summary.forks}</dd>
+        </div>
+      </dl>
+      {loading ? (
+        <p className="muted">Loading step totals…</p>
+      ) : !steps ? (
+        <p className="muted">Step totals unavailable</p>
+      ) : (
+        <>
+          <div
+            className="summary-bar"
+            role="img"
+            aria-label={`${steps.cached} cached steps, ${steps.live} live steps`}
+          >
+            <span
+              className="summary-cached"
+              style={{ width: `${total ? (steps.cached / total) * 100 : 0}%` }}
+            />
+            <span
+              className="summary-live"
+              style={{ width: `${total ? (steps.live / total) * 100 : 0}%` }}
+            />
+          </div>
+          <div className="summary-legend mono">
+            <span>{steps.cached} cached</span>
+            <span>{steps.live} live</span>
+          </div>
+          <dl className="summary-counts">
+            <div>
+              <dt>Total latency</dt>
+              <dd className="mono">{steps.latency} ms</dd>
+            </div>
+          </dl>
+        </>
+      )}
+    </section>
+  );
+}
 
 export function RunMetrics({ steps }: { steps: Step[] }) {
   const counts = steps.reduce(
@@ -132,12 +192,30 @@ export function ForkGraph({
 }
 
 export function WaterfallBar({ steps, index }: { steps: Step[]; index: number }) {
-  const id = useId().replace(/:/g, '');
   const reduced = useReducedMotion();
   const chart = waterfall(steps.map((s) => s.latency_ms));
   const span = chart.spans[index];
   const start = (span.start / (chart.total || 1)) * 100;
   const width = ((span.end - span.start) / (chart.total || 1)) * 100;
+  if (steps[index].cached)
+    return (
+      <div
+        className="waterfall-bar cached-waterfall"
+        aria-label={`Cached request at ${span.start} milliseconds`}
+      >
+        <span className="cached-tick" style={{ left: `${start}%` }} />
+        <span
+          className="cached-label"
+          style={
+            start > 80
+              ? { right: `calc(${100 - start}% + 8px)` }
+              : { left: `calc(${start}% + 8px)` }
+          }
+        >
+          cached
+        </span>
+      </div>
+    );
   return (
     <svg
       className="waterfall-bar"
@@ -145,22 +223,13 @@ export function WaterfallBar({ steps, index }: { steps: Step[]; index: number })
       preserveAspectRatio="none"
       aria-hidden="true"
     >
-      <defs>
-        <pattern id={id} width="4" height="4" patternUnits="userSpaceOnUse">
-          <path
-            d="M-1 1 L1 -1 M0 4 L4 0 M3 5 L5 3"
-            stroke="var(--muted-foreground)"
-            strokeWidth="0.6"
-          />
-        </pattern>
-      </defs>
       <path d="M0 4 H100 M50 0 V8" stroke="var(--border)" strokeWidth="0.5" />
       <motion.rect
         x={Math.min(start, 99)}
         y="1"
         height="6"
         rx="0.8"
-        fill={steps[index].cached ? `url(#${id})` : 'var(--selection)'}
+        fill="var(--selection)"
         initial={{ width: reduced ? Math.max(2, width) : 0 }}
         animate={{ width: Math.max(2, width) }}
         transition={{ duration: reduced ? 0 : 0.2 }}
@@ -237,7 +306,11 @@ export function MetroTimeline({
           stroke={selected ? 'var(--foreground)' : 'var(--live)'}
           strokeWidth="2"
         />
-        <text x={x(position)} y={y + 18} textAnchor="middle">
+        <text
+          x={x(position) - (y === 36 ? 12 : 0)}
+          y={y + 18}
+          textAnchor={y === 36 ? 'end' : 'middle'}
+        >
           {step.step_index} · {cached ? 'cached' : `${step.latency_ms}ms`}
         </text>
       </g>

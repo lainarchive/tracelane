@@ -5,7 +5,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { SettingsDialog } from '@/components/SettingsDialog';
-import { ForkGraph, MetroTimeline, RunMetrics, WaterfallBar } from '@/components/RunCharts';
+import {
+  ForkGraph,
+  MetroTimeline,
+  RunMetrics,
+  RunSummary,
+  WaterfallBar,
+} from '@/components/RunCharts';
 import { forkLanes, waterfall } from '@/lib/charts';
 import { PaneResizer } from '@/components/PaneResizer';
 import { DiffPanel } from '@/components/DiffPanel';
@@ -141,6 +147,7 @@ export default function App() {
   const [stepIndex, setStepIndex] = useState<number | null>(null);
   const [runData, setRunData] = useState<RunDetail | null>(null);
   const [related, setRelated] = useState<RunDetail[]>([]);
+  const [summaryLoading, setSummaryLoading] = useState(true);
   const [detail, setDetail] = useState<StepDetail | null>(null);
   const [runError, setRunError] = useState('');
   const [stepError, setStepError] = useState('');
@@ -232,17 +239,15 @@ export default function App() {
     return () => controller.abort();
   }, [runId]);
   useEffect(() => {
-    if (!runId || runData?.run.id !== runId) return;
+    if (!runs) return;
     const controller = new AbortController();
     setRelated([]);
-    const ids =
-      runs
-        ?.filter((run) => run.id === runData.run.parent_run_id || run.parent_run_id === runId)
-        .map((run) => run.id) ?? [];
+    setSummaryLoading(true);
+    const ids = runs.map((run) => run.id);
     Promise.allSettled(
       ids.map((id) => api<RunDetail>(`/api/runs/${encodeURIComponent(id)}`, controller.signal)),
     ).then((results) => {
-      if (!controller.signal.aborted)
+      if (!controller.signal.aborted) {
         setRelated(
           results.flatMap((result) =>
             result.status === 'fulfilled' &&
@@ -252,9 +257,11 @@ export default function App() {
               : [],
           ),
         );
+        setSummaryLoading(false);
+      }
     });
     return () => controller.abort();
-  }, [runId, runData, runs]);
+  }, [runs]);
   useEffect(() => {
     if (!runId || runData?.run.id !== runId) return;
     if (!steps.some((step) => step.step_index === stepIndex)) {
@@ -494,6 +501,7 @@ export default function App() {
                 ))
               )}
             </nav>
+            {runs && <RunSummary runs={runs} details={related} loading={summaryLoading} />}
           </motion.aside>
           <PaneResizer
             name="Resize runs sidebar"
@@ -556,7 +564,6 @@ export default function App() {
                             <span className="added">+{step.files.added}</span>
                             <span className="modified">~{step.files.modified}</span>
                             <span className="deleted">-{step.files.deleted}</span>
-                            {step.cached && <span className="muted">cached</span>}
                           </div>
                           <div className="step-metrics">
                             <span

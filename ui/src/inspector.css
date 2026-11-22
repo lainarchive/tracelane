@@ -145,6 +145,78 @@ html[data-density='comfortable'] .graph-run .run {
   height: 8px;
   overflow: visible;
 }
+.cached-waterfall {
+  position: relative;
+}
+.cached-waterfall::before {
+  content: '';
+  position: absolute;
+  inset: 4px 0 auto;
+  border-top: 1px solid var(--border);
+}
+.cached-tick {
+  position: absolute;
+  top: 0;
+  width: 3px;
+  height: 8px;
+  border: 1px solid var(--muted-foreground);
+  background: var(--card);
+  transform: translateX(-50%);
+}
+.cached-label {
+  position: absolute;
+  top: -1px;
+  padding-inline: 3px;
+  background: var(--card);
+  color: var(--muted-foreground);
+  font-size: 9px;
+  line-height: 10px;
+}
+.run-summary {
+  flex-shrink: 0;
+  padding: 16px;
+  border-top: 1px solid var(--border);
+  color: var(--muted-foreground);
+  font-size: 10px;
+}
+.run-summary h3 {
+  margin: 0 0 12px;
+  font-size: 10px;
+  font-weight: 500;
+}
+.summary-counts {
+  margin: 0;
+  display: grid;
+  gap: 8px;
+}
+.summary-counts > div,
+.summary-legend {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.summary-counts dd {
+  margin: 0;
+  color: var(--foreground);
+}
+.summary-bar {
+  display: flex;
+  height: 4px;
+  margin-top: 14px;
+  background: var(--border);
+  overflow: hidden;
+  border-radius: 2px;
+}
+.summary-cached {
+  background: var(--muted-foreground);
+}
+.summary-live {
+  background: var(--live);
+}
+.summary-legend {
+  margin: 7px 0 14px;
+  font-size: 9px;
+}
 .step-counts > .added,
 .step-counts > .modified,
 .step-counts > .deleted {

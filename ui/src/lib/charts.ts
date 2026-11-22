@@ -1,5 +1,25 @@
 const latency = (value: number) => (Number.isFinite(value) ? Math.max(0, value) : 0);
 
+export function summarizeRuns(
+  runs: { id: string; parent_run_id: string | null }[],
+  details: { run: { id: string }; steps: { cached: boolean; latency_ms: number }[] }[],
+) {
+  const byId = new Map(details.map((detail) => [detail.run.id, detail]));
+  const complete = runs.every((run) => byId.has(run.id));
+  const steps = complete ? runs.flatMap((run) => byId.get(run.id)!.steps) : [];
+  return {
+    runs: runs.length,
+    forks: runs.filter((run) => run.parent_run_id !== null).length,
+    steps: complete
+      ? {
+          cached: steps.filter((step) => step.cached).length,
+          live: steps.filter((step) => !step.cached).length,
+          latency: waterfall(steps.map((step) => step.latency_ms)).total,
+        }
+      : null,
+  };
+}
+
 export function waterfall(values: number[]) {
   let total = 0;
   const spans = values.map((value) => {
