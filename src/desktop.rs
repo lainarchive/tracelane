@@ -1,5 +1,5 @@
 use crate::Result;
-use std::net::SocketAddr;
+use std::{net::SocketAddr, path::PathBuf};
 use tao::{
     dpi::LogicalSize,
     event::{Event, WindowEvent},
@@ -53,15 +53,26 @@ async fn protocol_response(
     })
 }
 
+fn webview_data_dir(base: Option<PathBuf>) -> Result<PathBuf> {
+    let path = base
+        .ok_or("could not locate a per-user data directory")?
+        .join("tracelane")
+        .join("webview");
+    std::fs::create_dir_all(&path)?;
+    Ok(path)
+}
+
 pub fn open_window(addr: SocketAddr) -> Result<()> {
+    let data_dir = webview_data_dir(dirs::data_local_dir())?;
     let mut event_loop = EventLoop::new();
+    let mut context = wry::WebContext::new(Some(data_dir));
     let window = WindowBuilder::new()
         .with_title("Tracelane")
         .with_inner_size(LogicalSize::new(1440.0, 900.0))
         .with_min_inner_size(LogicalSize::new(1000.0, 600.0))
         .build(&event_loop)?;
     let runtime = tokio::runtime::Handle::current();
-    let builder = WebViewBuilder::new()
+    let builder = WebViewBuilder::new_with_web_context(&mut context)
         .with_asynchronous_custom_protocol("tracelane".into(), move |_, request, responder| {
             runtime.spawn(async move {
                 responder.respond(protocol_response(addr, request).await);
@@ -95,6 +106,21 @@ pub fn open_window(addr: SocketAddr) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn profile_is_created_under_the_user_data_directory() {
+        let base = tempfile::tempdir().unwrap();
+        let path = webview_data_dir(Some(base.path().to_path_buf())).unwrap();
+        assert_eq!(path, base.path().join("tracelane/webview"));
+        assert!(path.is_dir());
+    }
+
+    #[test]
+    fn profile_reports_missing_or_unwritable_data_directories() {
+        assert!(webview_data_dir(None).is_err());
+        let file = tempfile::NamedTempFile::new().unwrap();
+        assert!(webview_data_dir(Some(file.path().to_path_buf())).is_err());
+    }
 
     #[tokio::test]
     async fn protocol_serves_ui_and_api_from_the_same_origin() {

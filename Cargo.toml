@@ -5,7 +5,7 @@ edition = "2024"
 
 [features]
 default = ["desktop"]
-desktop = ["dep:wry", "dep:tao"]
+desktop = ["dep:wry", "dep:tao", "dep:dirs"]
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }
@@ -22,6 +22,7 @@ similar = "2"
 chrono = "0.4"
 wry = { version = "0.57.3", optional = true }
 tao = { version = "0.37.3", optional = true }
+dirs = { version = "6", optional = true }
 
 [dev-dependencies]
 tempfile = "3"
