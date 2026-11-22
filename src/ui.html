@@ -1088,6 +1088,8 @@
           .map((block) => {
             if (typeof block === 'string') return block;
             if (!block || typeof block !== 'object') return '';
+            if (block.type === 'refusal')
+              return typeof block.refusal === 'string' ? block.refusal : '';
             if (typeof block.text === 'string') return block.text;
             if (block.type === 'tool_result')
               return `Tool result ${block.tool_use_id || ''}\n${contentText(block.content)}`;

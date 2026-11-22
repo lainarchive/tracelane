@@ -176,3 +176,15 @@ test('Responses function calls render as tools alongside optional text', () => {
     assert.deepEqual(parse({}, { output: [] }).response.tools, []);
     assert.deepEqual(parse({}, { output: [null, { type: 'function_call' }] }).response.tools, [{ name: 'tool', arguments: '' }]);
 });
+
+test('refusal content blocks preserve their explanation and ignore missing text', () => {
+    const refusal = { type: 'refusal', refusal: 'I cannot help with that request.' };
+    const value = parse({ messages: [{ role: 'assistant', content: [null, refusal] }] }, { output: [{ type: 'message', content: [refusal] }] });
+    assert.equal(value.messages[0].text, refusal.refusal);
+    assert.equal(value.response.text, refusal.refusal);
+    const chat = parse({}, { choices: [{ message: { content: [{ type: 'text', text: 'Explanation:' }, refusal] } }] });
+    assert.equal(chat.response.text, 'Explanation:\n' + refusal.refusal);
+    for (const block of [{ type: 'refusal', refusal: '' }, { type: 'refusal', refusal: 7 }, { type: 'refusal' }]) {
+        assert.equal(parse({}, { content: [block] }).response.text.includes('[refusal]'), false);
+    }
+});
