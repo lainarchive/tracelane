@@ -1132,7 +1132,9 @@
             }
             model = chunk.model || chunk.message?.model || model;
             Object.assign(usage, chunk.message?.usage, chunk.usage);
-            const choice = chunk.choices?.[0];
+            const choice = Array.isArray(chunk.choices)
+              ? chunk.choices.find((choice) => choice && (choice.index ?? 0) === 0)
+              : undefined;
             finish = choice?.finish_reason || chunk.delta?.stop_reason || finish;
             answer.text += contentText(choice?.delta?.content);
             for (const call of choice?.delta?.tool_calls || []) {
@@ -1162,7 +1164,9 @@
           }
           answer.tools = [...tools.values()];
         } else if (response && typeof response === 'object') {
-          const choice = response.choices?.[0];
+          const choice = Array.isArray(response.choices)
+            ? response.choices.find((choice) => choice && (choice.index ?? 0) === 0)
+            : undefined;
           answer = messageData(choice?.message || { role: 'assistant', content: response.content });
           finish = choice?.finish_reason || response.stop_reason || '';
           usage = response.usage || {};

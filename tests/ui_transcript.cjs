@@ -68,6 +68,20 @@ test('Anthropic SSE joins text and final metadata', () => {
     assert.equal(value.usage.output_tokens, 2);
 });
 
+test('OpenAI SSE selects choice zero even when alternatives arrive first or alone', () => {
+    const chunks = [
+        { choices: [{ index: 1, delta: { content: 'Wrong', tool_calls: [{ index: 0, function: { name: 'wrong' } }] } }] },
+        { choices: [{ index: 1, delta: { content: 'Wrong again' } }, { index: 0, delta: { content: 'Hel' } }] },
+        { choices: [{ index: 0, delta: { content: 'lo' }, finish_reason: 'stop' }, { index: 1, finish_reason: 'length' }] },
+        { choices: [{ index: 1, delta: { content: 'Still wrong' }, finish_reason: 'length' }] },
+    ];
+    const stream = chunks.map(chunk => 'data: ' + JSON.stringify(chunk) + '\n\n').join('');
+    const value = parse({}, stream);
+    assert.equal(value.response.text, 'Hello');
+    assert.equal(value.finish, 'stop');
+    assert.deepEqual(value.response.tools, []);
+});
+
 test('empty, plain-text, error and malformed stream responses remain inspectable', () => {
     assert.equal(parse({}, null).response.text, 'No assistant text returned.');
     assert.equal(parse({}, 'plain text').response.text, 'plain text');
