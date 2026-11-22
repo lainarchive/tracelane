@@ -5,6 +5,32 @@ use tokio::{
     time::timeout,
 };
 
+#[cfg(all(feature = "desktop", target_os = "linux"))]
+#[tokio::test]
+async fn native_mode_without_a_working_display_suggests_browser_mode() {
+    let dir = tempfile::tempdir().unwrap();
+    for display in [None, Some("invalid-display")] {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_tracelane"));
+        command
+            .current_dir(dir.path())
+            .args(["ui", "--port", "0"])
+            .env_remove("DISPLAY")
+            .env_remove("WAYLAND_DISPLAY")
+            .kill_on_drop(true);
+        if let Some(display) = display {
+            command.env("DISPLAY", display);
+        }
+        let output = timeout(Duration::from_secs(10), command.output())
+            .await
+            .unwrap()
+            .unwrap();
+        let error = String::from_utf8_lossy(&output.stderr);
+        assert_eq!(output.status.code(), Some(1), "{error}");
+        assert!(error.contains("--browser"), "{error}");
+        assert!(!error.contains("panicked"), "{error}");
+    }
+}
+
 #[tokio::test]
 async fn browser_mode_serves_without_a_display_and_stops_with_the_process() {
     let dir = tempfile::tempdir().unwrap();

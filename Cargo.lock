@@ -2993,6 +2993,7 @@ dependencies = [
  "chrono",
  "clap",
  "dirs 6.0.0",
+ "gtk",
  "hex",
  "reqwest",
  "rusqlite",

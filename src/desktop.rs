@@ -63,6 +63,10 @@ fn webview_data_dir(base: Option<PathBuf>) -> Result<PathBuf> {
 }
 
 pub fn open_window(addr: SocketAddr) -> Result<()> {
+    #[cfg(target_os = "linux")]
+    gtk::init().map_err(|error| {
+        format!("Cannot initialize the desktop display; use --browser ({error})")
+    })?;
     let data_dir = webview_data_dir(dirs::data_local_dir())?;
     let mut event_loop = EventLoop::new();
     let mut context = wry::WebContext::new(Some(data_dir));
