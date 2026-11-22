@@ -1,6 +1,24 @@
 use std::fs;
 use tracelane::store::Store;
 
+#[cfg(unix)]
+#[test]
+fn state_directories_are_private_on_creation_and_reopen() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = tempfile::tempdir().unwrap();
+    for _ in 0..2 {
+        Store::open(dir.path()).unwrap();
+        for path in [".tracelane", ".tracelane/blobs"] {
+            let path = dir.path().join(path);
+            assert_eq!(
+                fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+                0o700
+            );
+            fs::set_permissions(path, fs::Permissions::from_mode(0o755)).unwrap();
+        }
+    }
+}
+
 #[test]
 fn snapshots_dedupe_and_restore_without_touching_ignored_directories() {
     let dir = tempfile::tempdir().unwrap();

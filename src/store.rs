@@ -25,7 +25,21 @@ pub fn workspace_entries(root: &Path) -> impl Iterator<Item = walkdir::Result<wa
 }
 impl Store {
     pub fn open(root: &Path) -> Result<Self> {
-        fs::create_dir_all(root.join(".tracelane/blobs"))?;
+        let mut builder = fs::DirBuilder::new();
+        builder.recursive(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::DirBuilderExt;
+            builder.mode(0o700);
+        }
+        builder.create(root.join(".tracelane/blobs"))?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            for path in [".tracelane", ".tracelane/blobs"] {
+                fs::set_permissions(root.join(path), fs::Permissions::from_mode(0o700))?;
+            }
+        }
         let db = Connection::open(root.join(".tracelane/traces.db"))?;
         db.execute_batch("PRAGMA journal_mode=WAL;
 CREATE TABLE IF NOT EXISTS snapshots(id TEXT PRIMARY KEY, created_at TEXT NOT NULL);
