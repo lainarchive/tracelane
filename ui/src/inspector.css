@@ -92,7 +92,7 @@
 }
 #runs {
   position: relative;
-  min-height: 160px;
+  min-height: 0;
 }
 @media (max-height: 700px) {
   .run-summary {
@@ -179,7 +179,9 @@ html[data-density='comfortable'] .graph-run .run {
   line-height: 10px;
 }
 .run-summary {
-  flex-shrink: 0;
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow: hidden;
   padding: 16px;
   border-top: 1px solid var(--border);
   color: var(--muted-foreground);
@@ -471,6 +473,7 @@ kbd {
 .workspace {
   display: grid;
   grid-template-columns: var(--sidebar-size) 12px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   flex: 1;
   min-height: 0;
   padding: 12px;
@@ -531,6 +534,7 @@ kbd {
   font-size: 10px;
 }
 .filter-wrap {
+  flex-shrink: 0;
   position: relative;
   padding: 12px;
   border-bottom: 1px solid var(--border);
@@ -556,7 +560,8 @@ kbd {
   color: var(--muted-foreground);
 }
 #runs {
-  flex: 1;
+  flex: 1 1 0;
+  overflow: auto;
   padding-block: 8px;
 }
 .run {
