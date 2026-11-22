@@ -33,6 +33,8 @@ enum Command {
     Replay {
         run_id: String,
         #[arg(long)]
+        target: Option<String>,
+        #[arg(long)]
         from_step: u32,
         #[arg(long, default_value_t = 7474)]
         port: u16,
@@ -83,6 +85,7 @@ async fn run() -> Result<i32> {
         ),
         Command::Replay {
             run_id,
+            target,
             from_step,
             port,
             command,
@@ -100,12 +103,9 @@ async fn run() -> Result<i32> {
             if command.is_empty() {
                 return Ok(0);
             }
-            let target: String =
-                store
-                    .db
-                    .query_row("SELECT target FROM runs WHERE id=?1", [&run_id], |r| {
-                        r.get(0)
-                    })?;
+            let target = target
+                .or_else(|| std::env::var("TRACELANE_UPSTREAM_URL").ok())
+                .unwrap_or_else(|| "https://api.openai.com".into());
             (command, target, port, Some((run_id, from_step)))
         }
     };

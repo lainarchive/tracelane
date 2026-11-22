@@ -99,3 +99,42 @@ fn child_exit_code_and_environment_are_recorded() {
         .unwrap();
     assert_eq!(code, 7);
 }
+
+#[test]
+fn replay_target_overrides_parent_and_uses_record_default_when_unset() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = Store::open(dir.path()).unwrap();
+    let snapshot = store.snapshot().unwrap();
+    let run = create_run(&store, "parent", "http://parent.invalid", None).unwrap();
+    store.db.execute("INSERT INTO steps VALUES (?1,1,'POST','/v1/messages','{}','{}',200,0,?2,?2,0,'now','application/json')",rusqlite::params![run,snapshot]).unwrap();
+    for (extra, expected) in [
+        (
+            vec!["--target", "http://override.invalid"],
+            "http://override.invalid",
+        ),
+        (vec![], "http://environment.invalid"),
+    ] {
+        let output = Command::new(env!("CARGO_BIN_EXE_tracelane"))
+            .current_dir(dir.path())
+            .env("TRACELANE_UPSTREAM_URL", "http://environment.invalid")
+            .args(["replay", &run, "--from-step", "1", "--port", "0"])
+            .args(extra)
+            .args(["--", "true"])
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let target: String = store
+            .db
+            .query_row(
+                "SELECT target FROM runs WHERE parent_run_id=?1 ORDER BY started_at DESC LIMIT 1",
+                [&run],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(target, expected);
+    }
+}
