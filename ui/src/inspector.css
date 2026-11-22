@@ -235,6 +235,18 @@ html[data-density='comfortable'] .graph-run .run {
   min-height: 0;
   min-width: 0;
 }
+.whitespace-character {
+  position: relative;
+}
+.whitespace-character::before {
+  content: attr(data-marker);
+  position: absolute;
+  left: 0;
+  top: 0;
+  color: var(--muted-foreground);
+  pointer-events: none;
+  user-select: none;
+}
 .diff-layout > .diff-body {
   min-width: 0;
 }

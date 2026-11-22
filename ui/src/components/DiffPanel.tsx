@@ -2,7 +2,6 @@ import { Fragment, useRef, useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import type { Diff } from '@/lib/types';
-import { visibleWhitespace } from '@/lib/whitespace';
 import { minimapPositions } from '@/lib/charts';
 
 const changeClass = (file: Diff) =>
@@ -104,7 +103,22 @@ export function DiffPanel({
                             </span>
                             <span className="code">
                               {showWhitespace
-                                ? visibleWhitespace(line.text.replace(/\n$/, ''))
+                                ? line.text
+                                    .replace(/\n$/, '')
+                                    .split(/([ \t])/)
+                                    .map((part, index) =>
+                                      part === ' ' || part === '\t' ? (
+                                        <span
+                                          key={index}
+                                          className="whitespace-character"
+                                          data-marker={part === '\t' ? '→' : '·'}
+                                        >
+                                          {part}
+                                        </span>
+                                      ) : (
+                                        part
+                                      ),
+                                    )
                                 : line.text.replace(/\n$/, '')}
                             </span>
                           </div>
