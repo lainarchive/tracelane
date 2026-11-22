@@ -1061,7 +1061,6 @@ html[data-density='comfortable'] .studio-diff .diff-line {
 }
 @media (max-width: 1000px) {
   .studio-name,
-  .studio-app .run-info,
   .app-slash {
     display: none;
   }
