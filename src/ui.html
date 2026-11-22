@@ -60,7 +60,7 @@ function renderIO(){
 }
 $('raw-toggle').onclick=()=>{raw=!raw;renderIO()};
 document.addEventListener('keydown',event=>{if(event.altKey||event.ctrlKey||event.metaKey||/INPUT|TEXTAREA|SELECT/.test(event.target.tagName)||event.target.isContentEditable)return;if(!['j','k'].includes(event.key)||!currentSteps.length)return;event.preventDefault();const index=currentSteps.findIndex(s=>s.step_index===currentStep);const next=Math.max(0,Math.min(currentSteps.length-1,index+(event.key==='j'?1:-1)));if(next!==index)selectStep(currentSteps[next].step_index)});
-function fromHash(){try{const [id,step]=location.hash.slice(1).split('/');const run=runs.find(r=>r.id===decodeURIComponent(id||''))||runs[0];if(run)selectRun(run.id,Number(step))}catch(error){notice(error)}}
+function fromHash(){try{const [id,step]=location.hash.slice(1).split('/');const run=runs.find(r=>r.id===decodeURIComponent(id||''))||runs[0];if(run)selectRun(run.id,Number(step))}catch{if(runs[0])selectRun(runs[0].id)}}
 window.addEventListener('hashchange',fromHash);
 api('/api/runs').then(data=>{runs=data;renderRuns();fromHash()}).catch(error=>{notice(error);empty($('runs'),'Unable to load runs.')});
 </script>
