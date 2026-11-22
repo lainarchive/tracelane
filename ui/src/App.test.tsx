@@ -9,6 +9,49 @@ afterEach(() => {
   localStorage.clear();
 });
 
+test('selected run and step load before sequential background summary requests', async () => {
+  mockInspector();
+  const original = fetch;
+  const [run] = await (await original('/api/runs')).json();
+  const calls: string[] = [];
+  let releaseRun!: () => void, releaseStep!: () => void, releaseOther!: () => void;
+  const runGate = new Promise<void>((resolve) => {
+    releaseRun = resolve;
+  });
+  const stepGate = new Promise<void>((resolve) => {
+    releaseStep = resolve;
+  });
+  const otherGate = new Promise<void>((resolve) => {
+    releaseOther = resolve;
+  });
+  vi.stubGlobal('fetch', async (path: string) => {
+    calls.push(path);
+    if (path === '/api/runs')
+      return { ok: true, json: async () => [run, { ...run, id: 'other' }, { ...run, id: 'last' }] };
+    if (path === '/api/runs/run') await runGate;
+    if (path.includes('/steps/')) await stepGate;
+    if (path === '/api/runs/other') await otherGate;
+    if (path === '/api/runs/other' || path === '/api/runs/last')
+      return {
+        ok: true,
+        json: async () => ({ run: { ...run, id: path.split('/').at(-1) }, steps: [] }),
+      };
+    return original(path);
+  });
+  history.replaceState(null, '', '#run/2');
+  render(<App />);
+  await waitFor(() => expect(calls).toContain('/api/runs/run'));
+  expect(calls).not.toContain('/api/runs/other');
+  releaseRun();
+  await waitFor(() => expect(calls).toContain('/api/runs/run/steps/2'));
+  expect(calls).not.toContain('/api/runs/other');
+  releaseStep();
+  await waitFor(() => expect(calls).toContain('/api/runs/other'));
+  expect(calls).not.toContain('/api/runs/last');
+  releaseOther();
+  await waitFor(() => expect(calls).toContain('/api/runs/last'));
+});
+
 test('deep-linked requests scroll into view after the timeline has loaded', async () => {
   mockInspector();
   const scroll = vi.fn();

@@ -148,6 +148,7 @@ export default function App() {
   const [runData, setRunData] = useState<RunDetail | null>(null);
   const [related, setRelated] = useState<RunDetail[]>([]);
   const [summaryLoading, setSummaryLoading] = useState(true);
+  const summaryRuns = useRef(new Map<string, RunDetail>());
   const [detail, setDetail] = useState<StepDetail | null>(null);
   const [runError, setRunError] = useState('');
   const [stepError, setStepError] = useState('');
@@ -239,29 +240,41 @@ export default function App() {
     return () => controller.abort();
   }, [runId]);
   useEffect(() => {
-    if (!runs) return;
+    if (
+      !runs ||
+      runData?.run.id !== runId ||
+      (runData.steps.length > 0 && detail?.step_index !== stepIndex)
+    )
+      return;
     const controller = new AbortController();
-    setRelated([]);
-    setSummaryLoading(true);
-    const ids = runs.map((run) => run.id);
-    Promise.allSettled(
-      ids.map((id) => api<RunDetail>(`/api/runs/${encodeURIComponent(id)}`, controller.signal)),
-    ).then((results) => {
-      if (!controller.signal.aborted) {
-        setRelated(
-          results.flatMap((result) =>
-            result.status === 'fulfilled' &&
-            result.value.run?.id &&
-            Array.isArray(result.value.steps)
-              ? [result.value]
-              : [],
-          ),
-        );
-        setSummaryLoading(false);
+    summaryRuns.current.set(runData.run.id, runData);
+    setRelated([...summaryRuns.current.values()]);
+    const pending = runs.filter((run) => !summaryRuns.current.has(run.id));
+    setSummaryLoading(pending.length > 0);
+    const timer = window.setTimeout(async () => {
+      for (const run of pending) {
+        if (controller.signal.aborted) return;
+        try {
+          const data = await api<RunDetail>(
+            `/api/runs/${encodeURIComponent(run.id)}`,
+            controller.signal,
+          );
+          if (controller.signal.aborted) return;
+          if (data.run?.id === run.id && Array.isArray(data.steps)) {
+            summaryRuns.current.set(run.id, data);
+            setRelated([...summaryRuns.current.values()]);
+          }
+        } catch {
+          if (controller.signal.aborted) return;
+        }
       }
-    });
-    return () => controller.abort();
-  }, [runs]);
+      setSummaryLoading(false);
+    }, 150);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [runs, runId, runData, detail, stepIndex]);
   useEffect(() => {
     if (!runId || runData?.run.id !== runId) return;
     if (!steps.some((step) => step.step_index === stepIndex)) {
