@@ -15,34 +15,6 @@ pub struct Store {
     pub db: Connection,
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn failed_blob_copy_does_not_publish_partial_content() {
-        struct FailingReader(bool);
-        impl std::io::Read for FailingReader {
-            fn read(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
-                if self.0 {
-                    return Err(std::io::Error::other("copy interrupted"));
-                }
-                self.0 = true;
-                buffer[..4].copy_from_slice(b"part");
-                Ok(4)
-            }
-        }
-        let dir = tempfile::tempdir().unwrap();
-        let sha = hash(b"partial content");
-        assert!(write_blob(dir.path(), &sha, FailingReader(false)).is_err());
-        assert!(!dir.path().join(&sha).exists());
-        assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 0);
-        write_blob(dir.path(), &sha, b"partial content".as_slice()).unwrap();
-        assert_eq!(fs::read(dir.path().join(&sha)).unwrap(), b"partial content");
-        write_blob(dir.path(), &sha, FailingReader(false)).unwrap();
-        assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 1);
-    }
-}
 pub fn hash(bytes: &[u8]) -> String {
     hex::encode(Sha256::digest(bytes))
 }
@@ -230,5 +202,34 @@ CREATE TABLE IF NOT EXISTS steps(run_id TEXT, step_index INTEGER, method TEXT, p
             fs::write(dest, bytes)?;
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn failed_blob_copy_does_not_publish_partial_content() {
+        struct FailingReader(bool);
+        impl std::io::Read for FailingReader {
+            fn read(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
+                if self.0 {
+                    return Err(std::io::Error::other("copy interrupted"));
+                }
+                self.0 = true;
+                buffer[..4].copy_from_slice(b"part");
+                Ok(4)
+            }
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let sha = hash(b"partial content");
+        assert!(write_blob(dir.path(), &sha, FailingReader(false)).is_err());
+        assert!(!dir.path().join(&sha).exists());
+        assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 0);
+        write_blob(dir.path(), &sha, b"partial content".as_slice()).unwrap();
+        assert_eq!(fs::read(dir.path().join(&sha)).unwrap(), b"partial content");
+        write_blob(dir.path(), &sha, FailingReader(false)).unwrap();
+        assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 1);
     }
 }
