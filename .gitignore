@@ -1,2 +1,5 @@
 .tracelane/
+.superdesign/
 target/
+ui/node_modules/
+ui/*.tsbuildinfo

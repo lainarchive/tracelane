@@ -2,6 +2,17 @@
 name = "tracelane"
 version = "0.1.0"
 edition = "2024"
+description = "Record model HTTP requests with workspace snapshots and replay from a chosen step"
+repository = "https://github.com/lainarchive/tracelane"
+license = "MIT"
+readme = "README.md"
+keywords = ["llm", "debugging", "replay", "cli", "snapshots"]
+categories = ["command-line-utilities", "development-tools::debugging"]
+exclude = ["docs/*.mp4", "docs/*.gif"]
+
+[features]
+default = ["desktop"]
+desktop = ["dep:wry", "dep:tao", "dep:dirs", "dep:gtk"]
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }
@@ -16,6 +27,12 @@ serde_json = "1"
 walkdir = "2"
 similar = "2"
 chrono = "0.4"
+wry = { version = "0.57.3", optional = true }
+tao = { version = "0.37.3", optional = true }
+dirs = { version = "6", optional = true }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+gtk = { version = "0.18", optional = true }
 
 [dev-dependencies]
 tempfile = "3"

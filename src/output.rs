@@ -12,7 +12,7 @@ pub fn paint(text: impl std::fmt::Display, code: &str) -> String {
     if std::io::stdout().is_terminal() && std::env::var_os("NO_COLOR").is_none() {
         format!("\x1b[{code}m{text}\x1b[0m")
     } else {
-        text.to_string()
+        text
     }
 }
 pub fn timestamp() -> String {

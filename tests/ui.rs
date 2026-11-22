@@ -2,6 +2,30 @@ use std::fs;
 use tracelane::{proxy::create_run, store::Store, ui::start_ui};
 
 #[tokio::test]
+async fn inspector_reports_deleted_file_line_counts() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = Store::open(dir.path()).unwrap();
+    fs::write(dir.path().join("removed.txt"), "first\nsecond\n").unwrap();
+    let pre = store.snapshot().unwrap();
+    fs::remove_file(dir.path().join("removed.txt")).unwrap();
+    let post = store.snapshot().unwrap();
+    let run = create_run(&store, "delete", "http://localhost", None).unwrap();
+    store.db.execute("INSERT INTO steps VALUES (?1,1,'POST','/v1/messages','{}','{}',200,0,?2,?3,0,'now','application/json')", rusqlite::params![run,pre,post]).unwrap();
+    let server = start_ui(dir.path(), 0).await.unwrap();
+    let step: serde_json::Value =
+        reqwest::get(format!("http://{}/api/runs/{run}/steps/1", server.addr))
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+    assert_eq!(step["diffs"][0]["change"], "D");
+    assert_eq!(step["diffs"][0]["added_lines"], 0);
+    assert_eq!(step["diffs"][0]["deleted_lines"], 2);
+    server.shutdown().await.unwrap();
+}
+
+#[tokio::test]
 async fn inspector_serves_run_steps_structured_diff_and_missing_resources() {
     let dir = tempfile::tempdir().unwrap();
     let store = Store::open(dir.path()).unwrap();
@@ -12,6 +36,13 @@ async fn inspector_serves_run_steps_structured_diff_and_missing_resources() {
     let post = store.snapshot().unwrap();
     let run = create_run(&store, "fixture", "http://localhost", None).unwrap();
     let fork = create_run(&store, "fork", "http://localhost", Some((&run, 1))).unwrap();
+    store
+        .db
+        .execute(
+            "UPDATE runs SET finished_at='2026-11-22T02:00:03Z', exit_code=0 WHERE id=?1",
+            [&run],
+        )
+        .unwrap();
     store.db.execute("INSERT INTO steps VALUES (?1,1,'POST','/v1/messages',?2,?3,200,12,?4,?5,1,'now','application/json')",rusqlite::params![run,r#"{"model":"test","messages":[{"role":"user","content":"question"}]}"#,r#"{"content":[{"text":"answer"}]}"#,pre,post]).unwrap();
     let server = start_ui(dir.path(), 0).await.unwrap();
     let client = reqwest::Client::new();
@@ -41,6 +72,19 @@ async fn inspector_serves_run_steps_structured_diff_and_missing_resources() {
         .unwrap();
     assert_eq!(recorded["step_count"], 1);
     assert_eq!(recorded["command"], "fixture");
+    assert_eq!(recorded["display_command"], "fixture");
+    assert_eq!(recorded["target"], "http://localhost");
+    assert_eq!(recorded["finished_at"], "2026-11-22T02:00:03Z");
+    assert_eq!(recorded["exit_code"], 0);
+    let workspace: serde_json::Value = client
+        .get(format!("{base}/api/workspace"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(workspace["path"], dir.path().to_str().unwrap());
     let readable = create_run(
         &store,
         r#"["cargo","run","--example","mock_agent"]"#,
@@ -63,6 +107,29 @@ async fn inspector_serves_run_steps_structured_diff_and_missing_resources() {
             .find(|r| r["id"] == readable)
             .unwrap()["command"],
         "cargo run --example mock_agent"
+    );
+    let labeled = create_run(
+        &store,
+        r#"["/usr/local/bin/npx","my-agent","fix auth"]"#,
+        "http://localhost",
+        None,
+    )
+    .unwrap();
+    let labeled: serde_json::Value = client
+        .get(format!("{base}/api/runs/{labeled}"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(
+        labeled["run"]["display_command"],
+        r#"npx my-agent "fix auth""#
+    );
+    assert_eq!(
+        labeled["run"]["command"],
+        "/usr/local/bin/npx my-agent fix auth"
     );
     let child = list
         .as_array()
@@ -97,10 +164,15 @@ async fn inspector_serves_run_steps_structured_diff_and_missing_resources() {
         .await
         .unwrap();
     assert_eq!(step["request"]["model"], "test");
+    assert_eq!(step["response_content_type"], "application/json");
     assert_eq!(step["summary"]["response"], "answer");
     let files = step["diffs"].as_array().unwrap();
     assert_eq!(files[0]["note"], "binary file, diff skipped");
     assert_eq!(files[1]["path"], "src.txt");
+    assert_eq!(files[0]["change"], "A");
+    assert_eq!(files[1]["change"], "M");
+    assert_eq!(files[1]["added_lines"], 1);
+    assert_eq!(files[1]["deleted_lines"], 1);
     let lines = files[1]["hunks"][0]["lines"].as_array().unwrap();
     assert!(lines.iter().any(|l| l["kind"] == "delete"
         && l["old_line"] == 1
@@ -120,6 +192,7 @@ async fn inspector_serves_run_steps_structured_diff_and_missing_resources() {
         .await
         .unwrap();
     assert_eq!(empty["steps"], serde_json::json!([]));
+    assert!(empty["run"]["finished_at"].is_null());
     for path in [
         "/api/runs/missing".to_owned(),
         format!("/api/runs/{run}/steps/99"),

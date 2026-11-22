@@ -1,103 +1,171 @@
-# Tracelane
+<h1 align="center">Tracelane</h1>
+<p align="center">Record model requests and file changes, then replay from a chosen step.</p>
+<p align="center">
+  <img src="docs/ui.png" alt="Tracelane showing a forked run, its cached first step, a Rust diff and model conversation" width="1200">
+</p>
 
-Record model HTTP requests with workspace snapshots, inspect file diffs, and replay a run from a chosen step.
+## Why
 
-## Install
+An agent run can go wrong several requests before you notice. A transcript often leaves you without the files from that point. Tracelane keeps snapshots around each request, so you can check the diff and restart from that state.
 
-You need a Rust toolchain and a C compiler for bundled SQLite.
+Runs stay in the workspace's `.tracelane/` directory. The inspector reads that local data; it doesn't need an account or a hosted service.
+
+## Quick start
+
+Install from Git with a current stable Rust toolchain and a C compiler for SQLite. Linux desktop builds also need the [GTK and WebKitGTK packages](#desktop-builds) below.
+
+```bash
+cargo install --git https://github.com/lainarchive/tracelane
+cd path/to/workspace
+```
+
+Replace `your-agent ...` with the command and arguments you normally run:
+
+```bash
+tracelane record -- your-agent ...
+tracelane inspect <run-id>
+tracelane inspect <run-id> --step 2
+tracelane ui
+```
+
+The child must honor `OPENAI_BASE_URL` or `ANTHROPIC_BASE_URL` and send its own authentication headers. Record defaults to `https://api.openai.com`. Set `--target <url>` or `TRACELANE_UPSTREAM_URL` to use another upstream.
+
+To retry from the second request, rerun the child command:
+
+**Save unrecorded work first.** Replay restores the pre-request snapshot, overwriting edits and deleting newer non-ignored files.
+
+```bash
+tracelane replay <run-id> --from-step 2 -- your-agent ...
+```
+
+The first matching request uses the recorded response; step 2 and later requests go upstream. Replay resolves its upstream independently: `--target`, then `TRACELANE_UPSTREAM_URL`, then `https://api.openai.com`. It does not inherit the parent's target. Pass the same target if the recording used a non-default URL.
+
+Omitting the child command restores files only. The inspector can show and copy a replay command, but cannot execute it. Record and replay use proxy port 7474 unless you set `--port`.
+
+For a URL instead of a native window:
+
+```bash
+tracelane ui --browser
+tracelane ui --browser --port 7480
+```
+
+Browser mode serves until Ctrl-C. The URL hash keeps the selected run and step across reloads.
+
+## Demo
+
+[![Ten-second loop: inspecting a diff, opening a fork and replaying cached then live steps](docs/hero.gif)](docs/demo.mp4)
+
+[Watch the 33-second demo with sound](docs/demo.mp4) · [View the record/replay terminal output](docs/terminal.png)
+
+Demo music: “Music” by [underscores](https://underscores.bandcamp.com/track/music), excerpted from 0:37 and mixed. Interface sounds by [Kenney.nl](https://kenney.nl/assets/interface-sounds), [CC0](https://creativecommons.org/publicdomain/zero/1.0/).
+
+To try it without API keys:
 
 ```bash
 git clone https://github.com/lainarchive/tracelane.git
 cd tracelane
-cargo install --path .
-```
-
-To build without installing:
-
-```bash
-cargo build --release
-cargo test --all-targets
-cargo clippy --all-targets -- -D warnings
-```
-
-## 10-second demo
-
-```bash
 scripts/demo.sh
 ```
 
-The script builds the release binary and examples first. After the build, the demo takes a few seconds and needs no API keys. It uses Bash, `curl`, and the Linux `script` utility, with ports 9900 and 7474 free.
-
-The mock agent writes Rust greeting functions, handles whitespace, and adds a test. The second response uses SSE. The script records all three requests, inspects step 2, then forks from step 2. The mock server prints three hits during recording and only two during replay: step 1 comes from the cache.
-
-The script leaves its temporary workspace in place and prints a command to open it with `tracelane ui`. The mock server stops when the script exits. You can also run `cargo test` inside that workspace to check the generated code.
-
-![Record and replay terminal output, with step 1 cached and steps 2 and 3 live](docs/terminal.png)
-
-## Commands
-
-### Record
-
-```bash
-tracelane record --target https://api.openai.com -- my-command arg
-```
-
-`--port` sets the local proxy port (default 7474). `--target` sets the upstream URL; when omitted, Tracelane uses `TRACELANE_UPSTREAM_URL`, then `https://api.openai.com`.
-
-The child receives `OPENAI_BASE_URL=http://127.0.0.1:<port>/v1` and `ANTHROPIC_BASE_URL=http://127.0.0.1:<port>`. It must honor those variables and supply any authentication headers the upstream requires. Tracelane exits with the child's exit code.
-
-### Inspect
-
-```bash
-tracelane inspect <run-id>
-tracelane inspect <run-id> --step 2
-```
-
-Without `--step`, inspect lists endpoints, status codes, latency, cache use, and added/modified/deleted file counts. `--step` shows unified file diffs and trimmed request/response summaries. Binary and non-UTF8 files get a skip note.
-
-### Replay
-
-```bash
-tracelane replay <run-id> --from-step 2
-tracelane replay <run-id> --from-step 2 --target http://127.0.0.1:9900 -- my-command
-```
-
-`--from-step` is required and starts at 1. Replay restores the selected step's pre-request snapshot. Without a command, it stops after restoring files. With a command, it creates a fork linked to the parent run. Requests before the selected step use the parent's cached responses; requests from that step onward go upstream.
-
-`--port` defaults to 7474. `--target` uses the same environment/default fallback as record; it does not inherit the parent's upstream URL.
-
-Replay overwrites modified files and deletes non-ignored files absent from the snapshot. Save unrecorded work before running it.
-
-### UI
-
-```bash
-tracelane ui --port 7480
-```
-
-Open `http://127.0.0.1:7480`. The sidebar groups forks under their parents. Select a step to see file diffs and model I/O; use `j` and `k` to move between steps, or toggle Raw JSON for full payloads. The URL hash keeps the selected run and step across reloads. All assets are embedded in the binary.
-
-![Trace inspector showing a fork, a cached first step, and a multiline Rust diff](docs/ui.png)
+The script builds the CLI and examples, records three requests against a local mock server, inspects step 2, then forks from it. The replay has one cached request and two live requests. It prints the retained workspace path and a command to open the inspector. It needs Bash, `curl`, the Linux `script` utility and free ports 9900 and 7474. Set `MOCK_LLM_PORT` to change the mock server's port.
 
 ## How it works
 
-The current directory is the workspace. Tracelane binds its proxy to localhost and forwards request methods, paths, query strings, bodies, and headers to the upstream, excluding transport headers such as `Host` and `Content-Length`.
+| Stage | What happens |
+| --- | --- |
+| Proxy | The child sends model HTTP requests through a loopback proxy. Tracelane forwards methods, paths, query strings, bodies and headers to the upstream, excluding transport headers. Requests are serialized. |
+| Snapshots | Each request gets a workspace snapshot before forwarding and another after the response. The inspector compares those files. |
+| Storage | `.tracelane/traces.db` holds runs, steps, fork links and snapshot manifests in SQLite WAL mode. `.tracelane/blobs/<sha256>` stores file contents once per hash. |
+| Replay | Restore the selected pre-request snapshot, then rerun the command. Earlier requests use matching cached responses; the selected step and later requests go live. A cache mismatch warns and disables the remaining cache for that fork. |
 
-A mutex serializes requests. Each request takes a pre-snapshot, forwards upstream, buffers the response, then takes a post-snapshot and writes a step to SQLite. JSON bodies are parsed. SSE bodies keep their original text and content type so cached SSE responses retain their bytes.
+Workspace walks skip `.git`, `target`, `node_modules` and `.tracelane` at any depth. Restore leaves those directories untouched. Cached requests match the recorded method, path and JSON body.
 
-State lives under `.tracelane/`:
+## Inspector
 
-- `traces.db` uses SQLite WAL and stores runs, fork links, steps, and snapshot manifests.
-- `blobs/<sha256>` stores file contents once per hash. A snapshot ID hashes its sorted manifest, so identical trees share a snapshot.
+The timeline connects the original run to its forks. Gray hatched clips are cached requests; solid clips are live requests sized by latency. Select a step to read its changed-file tree, snapshot pair, diff and model I/O. Conversation, Request and Response tabs share the same selection.
 
-Workspace walks skip `.git`, `target`, `node_modules`, and `.tracelane` at any depth. Restore recreates snapshot files, removes other non-ignored files, and prunes empty directories. Ignored directories remain untouched.
+<table>
+  <tr>
+    <td><img src="docs/ui-light.png" alt="Light theme with a selected fork step and file diff" width="560"></td>
+    <td><img src="docs/ui-palette.png" alt="Command menu for replay, navigation and settings" width="560"></td>
+  </tr>
+  <tr><td>Light theme</td><td>Command menu</td></tr>
+  <tr>
+    <td><img src="docs/ui-settings.png" alt="Theme, density, accent, diff and keyboard settings" width="560"></td>
+    <td><img src="docs/ui-native.png" alt="The Linux native window showing the forked run" width="560"></td>
+  </tr>
+  <tr><td>Settings</td><td>Native window</td></tr>
+</table>
 
-During replay, a cached request must match the recorded JSON body, method, and path. A mismatch prints a warning and disables the remaining cache for that fork. Cached steps still take snapshots and are marked `cached` in the new run.
+Drag the pane dividers to resize. The diff supports wrapping, whitespace markers and a change minimap. Settings and pane widths are saved locally. Native launches use a stable origin, so preferences survive backend port changes.
 
-## Limitations
+### Keyboard shortcuts
 
-- Streaming responses are buffered until complete, including SSE.
-- Snapshots capture file contents, not symlinks or permissions. Paths must be UTF-8.
-- Snapshots bracket HTTP requests. Edits made after a response are outside that request's diff. The demo overlaps each local edit with the next request so the diffs contain real file changes; the final test-file write happens after the last response.
-- Cached JSON is reserialized, so whitespace and object-key order may differ from the original response. SSE text is preserved.
-- Replay restores local files and substitutes model responses. It does not undo external side effects from the child command.
-- Payloads and workspace files may contain secrets. Keep `.tracelane/` private and out of version control. The local inspector has no authentication.
+| Key | Action |
+| --- | --- |
+| `Cmd-K` / `Ctrl-K` | Find a run, step, file or command |
+| `j` / `k` | Next / previous step |
+| `]` / `[` | Next / previous run |
+| `/` | Focus the run filter |
+| `r` | Toggle raw payloads |
+| `,` | Open settings |
+| `Esc` | Close the command menu or settings |
+
+## Desktop builds
+
+The default `desktop` feature uses Wry and Tao to open the OS webview. All UI assets are embedded in the binary. An in-process server listens on a random loopback port and stops when the window closes; `--port` overrides the port. Browser mode defaults to 7480.
+
+On Ubuntu, install these packages before building:
+
+```bash
+sudo apt install libgtk-3-dev libwebkit2gtk-4.1-dev pkg-config
+```
+
+Linux native windows need GTK 3 and WebKitGTK 4.1 at runtime (`libgtk-3-0 libwebkit2gtk-4.1-0` on Ubuntu). In a session without a display, use `--browser`.
+
+To skip desktop dependencies entirely:
+
+```bash
+cargo install --git https://github.com/lainarchive/tracelane --no-default-features
+```
+
+That build always uses browser mode, including for `tracelane ui`.
+
+## Limits and data safety
+
+- Streaming responses, including SSE, are buffered until complete.
+- Snapshots store file contents, not symlinks or permissions. Paths must be UTF-8.
+- Snapshots bracket HTTP requests. Edits made after a response may appear in a later step instead of that request's diff.
+- Cached JSON is reserialized, so whitespace and key order can change. SSE response text is preserved.
+- Replay doesn't undo external effects from the child command, such as network calls or database writes.
+- Payloads and files can contain credentials. Keep `.tracelane/` private and out of version control. The inspector has no authentication; keep its loopback address local.
+
+## Development
+
+The inspector is React and TypeScript in `ui/`. Use Node 22.13 or newer and npm:
+
+```bash
+cd ui
+npm ci
+npm run build
+npm test
+```
+
+The build writes the self-contained `src/ui/index.html`. Commit that file with frontend changes. Rust builds embed it and don't need Node. For UI development, run `tracelane ui --browser` in a recorded workspace and `npm run dev` in `ui/`. Vite forwards `/api` to `127.0.0.1:7480`.
+
+From the repository root:
+
+```bash
+cargo fmt --check
+cargo clippy --all-targets -- -D warnings
+cargo clippy --all-targets --no-default-features -- -D warnings
+cargo test --all-targets
+cargo test --all-targets --no-default-features
+scripts/demo.sh
+```
+
+The tests are headless and don't open native windows.
+
+## License
+
+[MIT](LICENSE) for the code, copyright lainarchive / jaden. Demo audio uses the separate licenses credited above.

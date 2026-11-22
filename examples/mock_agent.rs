@@ -47,23 +47,26 @@ fn validate_path(path: &str) -> Result<()> {
     }
     Ok(())
 }
-fn apply(text: &str) -> Result<()> {
+fn apply(root: &Path, text: &str) -> Result<()> {
     let action: Value = serde_json::from_str(text)?;
-    let path = action["path"].as_str().ok_or("missing file path")?;
-    let content = action["content"].as_str().ok_or("missing file content")?;
-    validate_path(path)?;
-    let path = Path::new(path);
-    let mut ancestor = Some(path);
-    while let Some(part) = ancestor {
-        if fs::symlink_metadata(part).is_ok_and(|meta| meta.file_type().is_symlink()) {
-            return Err("symlink file path".into());
+    let additional = action["edits"].as_array().map(Vec::as_slice).unwrap_or(&[]);
+    for action in std::iter::once(&action).chain(additional) {
+        let path = action["path"].as_str().ok_or("missing file path")?;
+        let content = action["content"].as_str().ok_or("missing file content")?;
+        validate_path(path)?;
+        let path = root.join(path);
+        let mut ancestor = Some(path.as_path());
+        while let Some(part) = ancestor {
+            if fs::symlink_metadata(part).is_ok_and(|meta| meta.file_type().is_symlink()) {
+                return Err("symlink file path".into());
+            }
+            ancestor = part.parent();
         }
-        ancestor = part.parent();
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        fs::write(&path, content)?;
     }
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    fs::write(path, content)?;
     Ok(())
 }
 #[tokio::main]
@@ -84,7 +87,7 @@ async fn main() -> Result<()> {
         let edit = async {
             if let Some(text) = pending.take() {
                 tokio::time::sleep(Duration::from_millis(75)).await;
-                apply(&text)?;
+                apply(Path::new("."), &text)?;
             }
             Ok::<_, Box<dyn std::error::Error + Send + Sync>>(())
         };
@@ -96,13 +99,27 @@ async fn main() -> Result<()> {
         pending = Some(text);
     }
     if let Some(text) = pending {
-        apply(&text)?;
+        apply(Path::new("."), &text)?;
     }
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn applies_primary_and_additional_file_actions() {
+        let dir = tempfile::tempdir().unwrap();
+        let text = serde_json::json!({"path":"src/lib.rs", "content":"source", "edits":[{"path":"README.md", "content":"docs"}]}).to_string();
+        super::apply(dir.path(), &text).unwrap();
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("src/lib.rs")).unwrap(),
+            "source"
+        );
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("README.md")).unwrap(),
+            "docs"
+        );
+    }
     #[test]
     fn decodes_json_and_streamed_reply_and_rejects_missing_content() {
         assert_eq!(

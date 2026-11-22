@@ -17,9 +17,12 @@ struct Run {
     parent_run_id: Option<String>,
     forked_from_step: Option<u32>,
     command: String,
+    display_command: String,
     started_at: String,
     exit_code: Option<i32>,
     step_count: u32,
+    target: String,
+    finished_at: Option<String>,
 }
 type Shared = Arc<Mutex<Store>>;
 type ApiResult = std::result::Result<Json<Value>, (StatusCode, Json<Value>)>;
@@ -35,23 +38,57 @@ fn missing() -> (StatusCode, Json<Value>) {
         Json(json!({"error":"resource not found"})),
     )
 }
+fn display_command(command: &str) -> String {
+    fn basename(executable: &str) -> &str {
+        FsPath::new(executable)
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or(executable)
+    }
+    if let Ok(args) = serde_json::from_str::<Vec<String>>(command) {
+        args.iter()
+            .enumerate()
+            .map(|(index, arg)| {
+                let arg = if index == 0 { basename(arg) } else { arg };
+                if !arg.is_empty()
+                    && arg
+                        .chars()
+                        .all(|c| c.is_alphanumeric() || "_-./:=@%+".contains(c))
+                {
+                    arg.to_owned()
+                } else {
+                    json!(arg).to_string()
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(" ")
+    } else {
+        let command = command.trim();
+        let end = command.find(char::is_whitespace).unwrap_or(command.len());
+        format!("{}{}", basename(&command[..end]), &command[end..])
+    }
+}
 fn runs(store: &Store) -> Result<Vec<Run>> {
-    let mut stmt=store.db.prepare("SELECT id,parent_run_id,forked_from_step,command,started_at,exit_code,(SELECT count(*) FROM steps WHERE run_id=runs.id) FROM runs ORDER BY started_at DESC,id")?;
+    let mut stmt=store.db.prepare("SELECT id,parent_run_id,forked_from_step,command,started_at,exit_code,(SELECT count(*) FROM steps WHERE run_id=runs.id),target,finished_at FROM runs ORDER BY started_at DESC,id")?;
     Ok(stmt
         .query_map([], |r| {
+            let command: String = r.get(3)?;
+            let display_command = display_command(&command);
             Ok(Run {
                 id: r.get(0)?,
                 parent_run_id: r.get(1)?,
                 forked_from_step: r.get(2)?,
                 command: {
-                    let command: String = r.get(3)?;
                     serde_json::from_str::<Vec<String>>(&command)
                         .map(|args| args.join(" "))
                         .unwrap_or(command)
                 },
+                display_command,
                 started_at: r.get(4)?,
                 exit_code: r.get(5)?,
                 step_count: r.get(6)?,
+                target: r.get(7)?,
+                finished_at: r.get(8)?,
             })
         })?
         .collect::<std::result::Result<_, _>>()?)
@@ -61,6 +98,10 @@ async fn list(State(state): State<Shared>) -> ApiResult {
     Ok(Json(
         serde_json::to_value(runs(&store).map_err(failure)?).map_err(failure)?,
     ))
+}
+async fn workspace(State(state): State<Shared>) -> ApiResult {
+    let store = state.lock().await;
+    Ok(Json(json!({"path":store.root.to_string_lossy()})))
 }
 async fn detail(State(state): State<Shared>, Path(id): Path<String>) -> ApiResult {
     let store = state.lock().await;
@@ -81,13 +122,47 @@ async fn step(State(state): State<Shared>, Path((id, n)): Path<(String, u32)>) -
         .into_iter()
         .find(|s| s.index == n)
         .ok_or_else(missing)?;
+    let before = store.manifest(&step.pre_snapshot_id).map_err(failure)?;
+    let after = store.manifest(&step.post_snapshot_id).map_err(failure)?;
+    let diffs = inspect::file_diffs(&store, &step)
+        .map_err(failure)?
+        .into_iter()
+        .map(|file| {
+            let added = file
+                .hunks
+                .iter()
+                .flat_map(|h| &h.lines)
+                .filter(|l| l.kind == "insert")
+                .count();
+            let deleted = file
+                .hunks
+                .iter()
+                .flat_map(|h| &h.lines)
+                .filter(|l| l.kind == "delete")
+                .count();
+            let change = if !before.contains_key(&file.path) {
+                "A"
+            } else if !after.contains_key(&file.path) {
+                "D"
+            } else {
+                "M"
+            };
+            let mut value = serde_json::to_value(file)?;
+            value["change"] = json!(change);
+            value["added_lines"] = json!(added);
+            value["deleted_lines"] = json!(deleted);
+            Ok(value)
+        })
+        .collect::<std::result::Result<Vec<_>, serde_json::Error>>()
+        .map_err(failure)?;
     Ok(Json(
-        json!({"step_index":step.index,"diffs":inspect::file_diffs(&store,&step).map_err(failure)?,"summary":inspect::summary(&step),"request":step.request,"response":step.response}),
+        json!({"step_index":step.index,"diffs":diffs,"summary":inspect::summary(&step),"request":step.request,"response":step.response,"response_content_type":step.response_content_type}),
     ))
 }
 pub fn router(store: Store) -> Router {
     Router::new()
-        .route("/", get(|| async { Html(include_str!("ui.html")) }))
+        .route("/", get(|| async { Html(include_str!("ui/index.html")) }))
+        .route("/api/workspace", get(workspace))
         .route("/api/runs", get(list))
         .route("/api/runs/{id}", get(detail))
         .route("/api/runs/{id}/steps/{n}", get(step))
@@ -118,4 +193,28 @@ pub async fn start_ui(root: &FsPath, port: u16) -> Result<UiServer> {
             .await
     });
     Ok(UiServer { addr, stop, task })
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn command_labels_shorten_executables_and_preserve_argument_boundaries() {
+        for (command, expected) in [
+            (r#"["/home/user/bin/mock_agent"]"#, "mock_agent"),
+            (
+                r#"["/usr/bin/npx","my-agent","fix auth"]"#,
+                r#"npx my-agent "fix auth""#,
+            ),
+            (r#"["/path with spaces/my agent",""]"#, r#""my agent" """#),
+            ("[]", ""),
+            ("", ""),
+            (
+                r#"/usr/bin/npx my-agent "fix auth""#,
+                r#"npx my-agent "fix auth""#,
+            ),
+            ("[invalid", "[invalid"),
+        ] {
+            assert_eq!(super::display_command(command), expected);
+        }
+    }
 }

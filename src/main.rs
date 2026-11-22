@@ -14,8 +14,10 @@ struct Cli {
 #[derive(Subcommand)]
 enum Command {
     Ui {
-        #[arg(long, default_value_t = 7480)]
-        port: u16,
+        #[arg(long, help = "Loopback port (desktop: random; browser/headless: 7480)")]
+        port: Option<u16>,
+        #[arg(long, help = "Print a URL instead of opening a native window")]
+        browser: bool,
     },
     Record {
         #[arg(long, default_value_t = 7474)]
@@ -56,8 +58,15 @@ async fn run() -> Result<i32> {
     let root = std::env::current_dir()?;
     let store = Store::open(&root)?;
     let (command, target, port, parent) = match Cli::parse().command {
-        Command::Ui { port } => {
-            let server = tracelane::ui::start_ui(&root, port).await?;
+        Command::Ui { port, browser } => {
+            let server = tracelane::ui::start_ui(&root, ui_port(port, browser)).await?;
+            #[cfg(feature = "desktop")]
+            if !browser {
+                let result = tracelane::desktop::open_window(server.addr);
+                server.shutdown().await?;
+                result?;
+                return Ok(0);
+            }
             println!(
                 "{}  inspector http://{}",
                 tracelane::output::timestamp(),
@@ -143,4 +152,34 @@ async fn run() -> Result<i32> {
         proxy::steps(&store, &run)?.len()
     );
     Ok(code)
+}
+
+fn ui_port(port: Option<u16>, browser: bool) -> u16 {
+    port.unwrap_or(if cfg!(feature = "desktop") && !browser {
+        0
+    } else {
+        7480
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ui_accepts_explicit_browser_mode_and_random_port() {
+        assert!(Cli::try_parse_from(["tracelane", "ui", "--browser", "--port", "0"]).is_ok());
+    }
+
+    #[test]
+    fn ui_ports_respect_overrides_and_headless_defaults() {
+        assert_eq!(ui_port(Some(0), false), 0);
+        assert_eq!(ui_port(Some(9191), true), 9191);
+        assert_eq!(ui_port(None, true), 7480);
+        assert_eq!(
+            ui_port(None, false),
+            if cfg!(feature = "desktop") { 0 } else { 7480 }
+        );
+        assert!(Cli::try_parse_from(["tracelane", "ui", "--port", "65536"]).is_err());
+    }
 }
