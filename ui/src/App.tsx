@@ -244,8 +244,10 @@ export default function App() {
         '',
         `#${encodeURIComponent(runId)}${stepIndex !== null ? '/' + stepIndex : ''}`,
       );
-    document.querySelector('.step.active')?.scrollIntoView({ block: 'nearest' });
   }, [runId, stepIndex]);
+  useEffect(() => {
+    document.querySelector('.step.active')?.scrollIntoView({ block: 'nearest' });
+  }, [runId, stepIndex, runData]);
   useEffect(() => {
     const onResize = () => setWidth(window.innerWidth);
     window.addEventListener('resize', onResize);

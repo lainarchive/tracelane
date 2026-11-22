@@ -9,6 +9,18 @@ afterEach(() => {
   localStorage.clear();
 });
 
+test('deep-linked requests scroll into view after the timeline has loaded', async () => {
+  mockInspector();
+  const scroll = vi.fn();
+  Element.prototype.scrollIntoView = scroll;
+  history.replaceState(null, '', '#run/2');
+  render(<App />);
+  const selected = (await screen.findByText('02')).closest('button')!;
+  await waitFor(() => expect(selected.getAttribute('aria-current')).toBe('step'));
+  await waitFor(() => expect(scroll).toHaveBeenCalledWith({ block: 'nearest' }));
+  expect(scroll.mock.instances).toContain(selected);
+});
+
 function mockInspector(parentId: string | null = null) {
   const run = {
     id: 'run',
