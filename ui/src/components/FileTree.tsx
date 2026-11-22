@@ -16,7 +16,7 @@ export function FileTree({
   const nodes = fileTree(files);
   const maximum = Math.max(1, ...files.map((file) => file.added_lines + file.deleted_lines));
   function branch(node: FileNode, depth: number): React.ReactNode {
-    const hidden = closed.has(node.path);
+    const hidden = !node.file && closed.has(node.path);
     return (
       <li key={node.path}>
         <button
@@ -59,7 +59,9 @@ export function FileTree({
             </>
           )}
         </button>
-        {!node.file && !hidden && <ul>{node.children.map((child) => branch(child, depth + 1))}</ul>}
+        {node.children.length > 0 && !hidden && (
+          <ul>{node.children.map((child) => branch(child, depth + 1))}</ul>
+        )}
       </li>
     );
   }
