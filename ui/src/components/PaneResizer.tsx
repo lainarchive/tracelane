@@ -3,11 +3,13 @@ import { useRef } from 'react';
 export function PaneResizer({
   name,
   horizontal = false,
+  reverse = false,
   value,
   onChange,
 }: {
   name: string;
   horizontal?: boolean;
+  reverse?: boolean;
   value: number;
   onChange: (value: number) => void;
 }) {
@@ -34,7 +36,8 @@ export function PaneResizer({
         if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
         const delta = (horizontal ? event.clientY : event.clientX) - initial.current.pointer;
         onChange(
-          initial.current.value + (horizontal ? (delta / initial.current.size) * 100 : delta),
+          initial.current.value +
+            (reverse ? -1 : 1) * (horizontal ? (delta / initial.current.size) * 100 : delta),
         );
       }}
       onPointerUp={(event) => {
@@ -45,7 +48,10 @@ export function PaneResizer({
         if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return;
         event.preventDefault();
         onChange(
-          value + (['ArrowLeft', 'ArrowUp'].includes(event.key) ? -1 : 1) * (horizontal ? 3 : 12),
+          value +
+            (reverse ? -1 : 1) *
+              (['ArrowLeft', 'ArrowUp'].includes(event.key) ? -1 : 1) *
+              (horizontal ? 3 : 12),
         );
       }}
     />

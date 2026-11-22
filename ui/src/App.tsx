@@ -700,8 +700,9 @@ export default function App() {
             </motion.section>
             <PaneResizer
               name="Resize model pane"
+              reverse
               value={sizes.timeline}
-              onChange={(value) => resize('timeline', 2 * sizes.timeline - value)}
+              onChange={(value) => resize('timeline', value)}
             />
             <motion.section
               className="pane studio-io"
