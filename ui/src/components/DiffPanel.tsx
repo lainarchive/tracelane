@@ -2,10 +2,18 @@ import { Fragment, useRef, useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import type { Diff } from '@/lib/types';
+import { visibleWhitespace } from '@/lib/whitespace';
 
 const changeClass = (file: Diff) =>
   file.change === 'A' ? 'added' : file.change === 'D' ? 'deleted' : 'modified';
-export function DiffPanel({ files }: { files: Diff[] }) {
+export function DiffPanel({
+  files,
+  showWhitespace = false,
+}: {
+  files: Diff[];
+  showWhitespace?: boolean;
+}) {
+  const [active, setActive] = useState(files[0]?.path);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const nodes = useRef(new Map<string, HTMLDivElement>());
   function collapse(path: string, open: boolean) {
@@ -23,9 +31,11 @@ export function DiffPanel({ files }: { files: Diff[] }) {
           {files.map((file) => (
             <button
               key={file.path}
-              className="file-tab mono"
+              className={`file-tab mono ${active === file.path ? 'selected' : ''}`}
+              aria-pressed={active === file.path}
               title={file.path}
               onClick={() => {
+                setActive(file.path);
                 collapse(file.path, true);
                 nodes.current.get(file.path)?.scrollIntoView({ block: 'start' });
               }}
@@ -72,7 +82,11 @@ export function DiffPanel({ files }: { files: Diff[] }) {
                           <span className="sign">
                             {line.kind === 'insert' ? '+' : line.kind === 'delete' ? '-' : ' '}
                           </span>
-                          <span className="code">{line.text.replace(/\n$/, '')}</span>
+                          <span className="code">
+                            {showWhitespace
+                              ? visibleWhitespace(line.text.replace(/\n$/, ''))
+                              : line.text.replace(/\n$/, '')}
+                          </span>
                         </div>
                       ))}
                     </Fragment>

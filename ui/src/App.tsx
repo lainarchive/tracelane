@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import { Settings as SettingsIcon } from 'lucide-react';
+import { Box, Search, GitCommitHorizontal, Settings as SettingsIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -323,12 +323,26 @@ export default function App() {
   return (
     <TooltipProvider>
       <header className="app-bar">
-        <span className="wordmark">tracelane</span>
+        <span className="wordmark">
+          <Box size={18} aria-hidden="true" />
+          tracelane
+        </span>
         <span className="workspace-path ellipsis mono" title={workspace}>
           {workspace}
         </span>
         <span className="keyboard-hint muted">
-          <kbd>j k</kbd> steps　<kbd>[ ]</kbd> runs　<kbd>/</kbd> filter　<kbd>r</kbd> raw
+          <span>
+            <kbd>j k</kbd> steps
+          </span>
+          <span>
+            <kbd>[ ]</kbd> runs
+          </span>
+          <span>
+            <kbd>/</kbd> filter
+          </span>
+          <span>
+            <kbd>r</kbd> raw
+          </span>
         </span>
         <Tooltip>
           <TooltipTrigger asChild>
@@ -354,6 +368,7 @@ export default function App() {
             </span>
           </div>
           <div className="filter-wrap">
+            <Search size={13} aria-hidden="true" />
             <Input
               ref={filter}
               id="filter"
@@ -395,31 +410,34 @@ export default function App() {
                     aria-current={run.id === runId}
                     onClick={() => chooseRun(run.id)}
                   >
-                    <div className="run-id mono">
-                      {run.id}
+                    <div className="run-id">
+                      <span className="mono ellipsis">{run.id}</span>
+                      <span className="run-time" title={run.started_at}>
+                        {settings.timestamps === 'relative'
+                          ? relativeTime(run.started_at)
+                          : new Date(run.started_at).toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="command ellipsis mono" title={run.command}>
+                      {run.display_command}
+                    </div>
+                    <div className="run-meta">
+                      <span className="mono">{run.step_count} steps</span>
                       {run.exit_code !== null && (
                         <span
                           title={`Exit ${run.exit_code}`}
                           aria-label={`Exit ${run.exit_code}`}
                           className={`exit-code mono ${run.exit_code ? 'error' : ''}`}
                         >
-                          {run.exit_code}
+                          exit {run.exit_code}
                         </span>
                       )}
                     </div>
-                    <div className="command ellipsis mono" title={run.command}>
-                      {run.display_command}
-                    </div>
-                    <div className="run-meta">
-                      <span title={run.started_at}>
-                        {settings.timestamps === 'relative'
-                          ? relativeTime(run.started_at)
-                          : new Date(run.started_at).toLocaleString()}
-                      </span>
-                      <span className="mono">{run.step_count} steps</span>
-                    </div>
                     {run.parent_run_id && (
-                      <div className="fork-note">fork @ step {run.forked_from_step}</div>
+                      <div className="fork-note">
+                        <GitCommitHorizontal size={12} aria-hidden="true" />
+                        fork @ step {run.forked_from_step}
+                      </div>
                     )}
                   </button>
                 </div>
@@ -454,7 +472,7 @@ export default function App() {
                   <Fragment key={step.step_index}>
                     {runData?.run.parent_run_id &&
                       step.step_index === runData.run.forked_from_step && (
-                        <div className="live-divider mono">live from step {step.step_index}</div>
+                        <div className="live-divider mono">LIVE from step {step.step_index}</div>
                       )}
                     <button
                       className={`step mono ${stepIndex === step.step_index ? 'active' : ''}`}
@@ -488,10 +506,9 @@ export default function App() {
                   </Fragment>
                 ))}
               </div>
-              <div className="timeline-footer mono">
-                {steps.filter((step) => step.cached).length} cached ·{' '}
-                {steps.filter((step) => !step.cached).length} live
-              </div>
+              {steps.length > 0 && !runData?.run.parent_run_id && (
+                <div className="live-divider mono">LIVE</div>
+              )}
             </aside>
             <PaneResizer
               name="Resize request timeline"
@@ -510,7 +527,11 @@ export default function App() {
                   </span>
                 </div>
                 {detail ? (
-                  <DiffPanel key={`${runId}/${stepIndex}`} files={detail.diffs} />
+                  <DiffPanel
+                    key={`${runId}/${stepIndex}`}
+                    files={detail.diffs}
+                    showWhitespace={settings.showWhitespace}
+                  />
                 ) : (
                   <Empty>{message}</Empty>
                 )}
@@ -546,6 +567,13 @@ export default function App() {
           </div>
         </section>
       </div>
+      <footer className="status-bar mono" aria-label="Run totals">
+        <span>{steps.filter((step) => step.cached).length} cached</span>
+        <span className="status-separator">|</span>
+        <span>{steps.filter((step) => !step.cached).length} live</span>
+        <span className="status-separator">|</span>
+        <span>{steps.reduce((sum, step) => sum + step.latency_ms, 0)} ms total</span>
+      </footer>
       <SettingsDialog
         open={settingsOpen}
         onOpenChange={setSettingsOpen}

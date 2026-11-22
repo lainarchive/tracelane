@@ -55,7 +55,7 @@ function MessageView({ message, subtitle }: { message: Message; subtitle?: strin
       );
   } catch {}
   return (
-    <section className="message">
+    <section className={`message ${subtitle === 'response' ? 'response-message' : ''}`}>
       <div className="message-role">
         <span className="label">{message.role}</span>
         <span className="muted label">{subtitle}</span>

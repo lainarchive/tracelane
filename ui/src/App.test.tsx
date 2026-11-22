@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, expect, test, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import App from './App';
 
 afterEach(() => {
@@ -79,9 +79,7 @@ test('malformed and unknown step hashes reset the current run to its first reque
     window.location.hash = hash;
     fireEvent(window, new HashChangeEvent('hashchange'));
     await waitFor(() =>
-      expect(screen.getByText('01').closest('button')!.getAttribute('aria-current')).toBe(
-        'step',
-      ),
+      expect(screen.getByText('01').closest('button')!.getAttribute('aria-current')).toBe('step'),
     );
     fireEvent.keyDown(document.body, { key: 'j' });
     await waitFor(() => expect(second.getAttribute('aria-current')).toBe('step'));
@@ -101,4 +99,29 @@ test('run filter trims whitespace and matches commands, ids, upstreams and paren
   fireEvent.change(filter, { target: { value: 'missing' } });
   expect(container.querySelectorAll('#runs .run')).toHaveLength(0);
   expect(container.querySelector('#runs')?.textContent).toContain('No matching runs');
+});
+
+test('settings segments and swatches apply and persist appearance and diff preferences', async () => {
+  mockInspector();
+  history.replaceState(null, '', '#run/1');
+  render(<App />);
+  await screen.findByText('02');
+  fireEvent.keyDown(document.body, { key: ',' });
+  const dialog = within(screen.getByRole('dialog'));
+  fireEvent.click(dialog.getByRole('radio', { name: /^Light$/ }));
+  expect(document.documentElement.className).toBe('light');
+  fireEvent.click(dialog.getByRole('button', { name: 'Blue accent' }));
+  expect(document.documentElement.style.getPropertyValue('--selection')).toBe('#3b82f6');
+  fireEvent.click(dialog.getByRole('radio', { name: 'Comfortable' }));
+  fireEvent.click(dialog.getByRole('radio', { name: 'Absolute' }));
+  fireEvent.click(dialog.getByRole('switch', { name: 'Wrap long lines' }));
+  fireEvent.click(dialog.getByRole('switch', { name: 'Show whitespace characters' }));
+  expect(JSON.parse(localStorage.getItem('tracelane.settings')!)).toMatchObject({
+    theme: 'light',
+    density: 'comfortable',
+    accent: '#3b82f6',
+    timestamps: 'absolute',
+    diffWrap: true,
+    showWhitespace: true,
+  });
 });

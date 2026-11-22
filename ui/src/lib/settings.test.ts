@@ -18,6 +18,7 @@ test('settings round trip and validate each field independently', () => {
     theme: 'light' as const,
     density: 'comfortable' as const,
     diffWrap: true,
+    showWhitespace: true,
     timestamps: 'absolute' as const,
     accent: '#aabbcc',
   };
@@ -44,6 +45,18 @@ test('settings round trip and validate each field independently', () => {
       settings,
     ),
   ).not.toThrow();
+});
+test('whitespace preference validates booleans and preserves older settings', () => {
+  expect(parseSettings('{"showWhitespace":true}').showWhitespace).toBe(true);
+  expect(parseSettings('{"showWhitespace":"true"}').showWhitespace).toBe(false);
+  expect(parseSettings('{"theme":"light"}').showWhitespace).toBe(false);
+});
+test('accent accepts swatch hex values and rejects CSS injection independently of theme', () => {
+  expect(parseSettings('{"accent":"#6366F1","theme":"light"}').accent).toBe('#6366F1');
+  expect(parseSettings('{"accent":"red; color: transparent","theme":"light"}')).toEqual({
+    ...defaultSettings,
+    theme: 'light',
+  });
 });
 test('system theme follows the operating system without overriding explicit choices', () => {
   expect(resolvedTheme('system', true)).toBe('dark');

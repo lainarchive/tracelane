@@ -2,6 +2,7 @@ export interface Settings {
   theme: 'dark' | 'light' | 'system';
   density: 'compact' | 'comfortable';
   diffWrap: boolean;
+  showWhitespace: boolean;
   timestamps: 'relative' | 'absolute';
   accent: string;
 }
@@ -9,8 +10,9 @@ export const defaultSettings: Settings = {
   theme: 'dark',
   density: 'compact',
   diffWrap: false,
+  showWhitespace: false,
   timestamps: 'relative',
-  accent: '#5e6ad2',
+  accent: '#6366f1',
 };
 export function parseSettings(value: string | null): Settings {
   const settings = { ...defaultSettings };
@@ -20,6 +22,7 @@ export function parseSettings(value: string | null): Settings {
     if (['dark', 'light', 'system'].includes(data.theme)) settings.theme = data.theme;
     if (['compact', 'comfortable'].includes(data.density)) settings.density = data.density;
     if (typeof data.diffWrap === 'boolean') settings.diffWrap = data.diffWrap;
+    if (typeof data.showWhitespace === 'boolean') settings.showWhitespace = data.showWhitespace;
     if (['relative', 'absolute'].includes(data.timestamps)) settings.timestamps = data.timestamps;
     if (typeof data.accent === 'string' && /^#[0-9a-f]{6}$/i.test(data.accent))
       settings.accent = data.accent;
