@@ -77,3 +77,34 @@ test('empty, plain-text, error and malformed stream responses remain inspectable
     assert.equal(broken.response.text, 'No assistant text returned.');
     assert.ok(parse({}, 'data: null\n\n').warning);
 });
+
+test('malformed content blocks and tool calls do not discard valid transcript text', () => {
+    const value = parse({ messages: [null, { role: 'user', content: [null, 7, false, { type: 'text', text: 'Keep this' }], tool_calls: [null, 8] }] }, { content: [null, { type: 'text', text: 'Answer' }] });
+    assert.equal(value.messages[1].text, 'Keep this');
+    assert.deepEqual(value.messages[1].tools, []);
+    assert.equal(value.response.text, 'Answer');
+});
+
+test('transcript rendering failures leave the diff and raw rendering available', () => {
+    const nodes = new Map();
+    const node = id => {
+        if (!nodes.has(id)) nodes.set(id, { hidden: false, textContent: '', children: [], replaceChildren(...children) { this.children = children; }, append(...children) { this.children.push(...children); }, setAttribute() {} });
+        return nodes.get(id);
+    };
+    const state = vm.createContext({
+        $: node,
+        detail: { request: { model: 'test' }, response: 'answer' }, raw: false,
+        el: (tag, className, text) => ({ tag, className, text, append() {} }),
+        empty: (target, message) => { target.textContent = message; },
+        transcript: () => { throw Error('render failure'); },
+        highlightedJson: value => ({ json: value }),
+    });
+    const render = html.slice(html.indexOf('function renderIO()'), html.indexOf('function toggleRaw()'));
+    node('diff').textContent = 'existing diff';
+    vm.runInContext(render + ';renderIO()', state);
+    assert.equal(node('diff').textContent, 'existing diff');
+    assert.match(node('io').textContent, /Raw/);
+    state.raw = true;
+    vm.runInContext('renderIO()', state);
+    assert.equal(node('io').children.length, 2);
+});

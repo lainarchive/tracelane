@@ -1073,7 +1073,8 @@
         return content
           .map((block) => {
             if (typeof block === 'string') return block;
-            if (block.text) return block.text;
+            if (!block || typeof block !== 'object') return '';
+            if (typeof block.text === 'string') return block.text;
             if (block.type === 'tool_result')
               return `Tool result ${block.tool_use_id || ''}\n${contentText(block.content)}`;
             if (block.type === 'tool_use') return '';
@@ -1084,12 +1085,15 @@
       }
 
       function messageData(message) {
-        const tools = (message.tool_calls || []).map((call) => ({
-          name: call.function?.name || call.name || 'tool',
-          arguments: call.function?.arguments || call.arguments || '',
-        }));
+        if (!message || typeof message !== 'object') message = {};
+        const tools = (Array.isArray(message.tool_calls) ? message.tool_calls : [])
+          .filter((call) => call && typeof call === 'object')
+          .map((call) => ({
+            name: call.function?.name || call.name || 'tool',
+            arguments: call.function?.arguments || call.arguments || '',
+          }));
         for (const block of Array.isArray(message.content) ? message.content : []) {
-          if (block.type === 'tool_use')
+          if (block?.type === 'tool_use')
             tools.push({ name: block.name, arguments: JSON.stringify(block.input, null, 2) });
         }
         return { role: message.role || 'assistant', text: contentText(message.content), tools };
@@ -1225,27 +1229,30 @@
         $('raw-toggle').setAttribute('aria-pressed', String(raw));
         $('io').replaceChildren();
         if (!detail) return;
-        const conversation = transcript(detail.request, detail.response);
-        const meta = [
-          conversation.model,
-          conversation.finish ? 'finish: ' + conversation.finish : '',
-        ];
-        const usage = conversation.usage;
-        if (usage.input_tokens !== undefined || usage.prompt_tokens !== undefined)
-          meta.push((usage.input_tokens ?? usage.prompt_tokens) + ' input tokens');
-        if (usage.output_tokens !== undefined || usage.completion_tokens !== undefined)
-          meta.push((usage.output_tokens ?? usage.completion_tokens) + ' output tokens');
-        if (usage.total_tokens !== undefined) meta.push(usage.total_tokens + ' total tokens');
-        if (conversation.warning) meta.push(conversation.warning);
-        $('io-meta').textContent = meta.filter(Boolean).join(' · ');
-        $('io-meta').hidden = !meta.some(Boolean);
+        $('io-meta').hidden = true;
         if (raw) {
           for (const name of ['request', 'response']) {
             const block = el('section', 'message');
             block.append(el('div', 'label', name), highlightedJson(detail[name]));
             $('io').append(block);
           }
-        } else {
+          return;
+        }
+        try {
+          const conversation = transcript(detail.request, detail.response);
+          const meta = [
+            conversation.model,
+            conversation.finish ? 'finish: ' + conversation.finish : '',
+          ];
+          const usage = conversation.usage;
+          if (usage.input_tokens !== undefined || usage.prompt_tokens !== undefined)
+            meta.push((usage.input_tokens ?? usage.prompt_tokens) + ' input tokens');
+          if (usage.output_tokens !== undefined || usage.completion_tokens !== undefined)
+            meta.push((usage.output_tokens ?? usage.completion_tokens) + ' output tokens');
+          if (usage.total_tokens !== undefined) meta.push(usage.total_tokens + ' total tokens');
+          if (conversation.warning) meta.push(conversation.warning);
+          $('io-meta').textContent = meta.filter(Boolean).join(' · ');
+          $('io-meta').hidden = !meta.some(Boolean);
           let current = conversation.messages.findLastIndex((message) => message.role === 'user');
           if (current < 0) current = Math.max(0, conversation.messages.length - 1);
           if (current > 0) {
@@ -1258,8 +1265,14 @@
           for (const message of conversation.messages.slice(current))
             $('io').append(messageNode(message, 'request'));
           $('io').append(messageNode(conversation.response, 'response'));
+          $('io').scrollTop = 0;
+        } catch {
+          $('io-meta').hidden = true;
+          empty(
+            $('io'),
+            'Unable to render this transcript. Select Raw to inspect the original request and response.',
+          );
         }
-        $('io').scrollTop = 0;
       }
 
       function toggleRaw() {
