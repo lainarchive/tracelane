@@ -31,9 +31,9 @@ fn instruction(messages: usize) -> Option<Value> {
     let mut action = json!({"path":path,"content":content});
     if messages == 1 || messages == 3 {
         let docs = if messages == 1 {
-            "# Greetings\n\nSmall greeting helpers for the demo workspace.\n\n- `greeting(name)` says hello.\n- `farewell(name)` says goodbye.\n"
+            "# Greetings\n\n- `greeting(name)` says hello.\n- `farewell(name)` says goodbye.\n"
         } else {
-            "# Greetings\n\nSmall greeting helpers for the demo workspace.\n\n- `greeting(name)` trims whitespace and handles empty names.\n- `farewell(name)` trims whitespace before saying goodbye.\n\nRun `cargo test` to check the examples.\n"
+            "# Greetings\n\n- `greeting(name)` trims whitespace and handles empty names.\n- `farewell(name)` trims whitespace before saying goodbye.\n\nRun `cargo test` to check the examples.\n"
         };
         action["edits"] = json!([{"path":"README.md","content":docs}]);
     }

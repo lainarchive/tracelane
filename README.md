@@ -23,17 +23,17 @@ cargo test --all-targets
 cargo clippy --all-targets -- -D warnings
 ```
 
-## 10-second demo
+## Demo
 
 ```bash
 scripts/demo.sh
 ```
 
-The script builds the release binary and examples first. After the build, the demo takes a few seconds and needs no API keys. It uses Bash, `curl`, and the Linux `script` utility, with ports 9900 and 7474 free.
+The script builds the release binary and examples, then runs in a few seconds without API keys. It needs Bash, `curl`, the Linux `script` utility, and free ports 9900 and 7474.
 
 The mock agent writes Rust greeting functions, handles whitespace, and adds a test. The second response uses SSE. The script records all three requests, inspects step 2, then forks from step 2. The mock server prints three hits during recording and only two during replay: step 1 comes from the cache.
 
-The script leaves its temporary workspace in place and prints a command to open it with `tracelane ui`. The mock server stops when the script exits. You can also run `cargo test` inside that workspace to check the generated code.
+The script keeps the temporary workspace and prints a command to open it with `tracelane ui`. The mock server stops when the script exits. Run `cargo test` in the workspace to check the generated code.
 
 ![Record and replay terminal output, with step 1 cached and steps 2 and 3 live](docs/terminal.png)
 
@@ -78,9 +78,11 @@ tracelane ui
 tracelane ui --browser --port 7480
 ```
 
-By default, the `desktop` feature opens a native OS webview (not Electron) backed by an in-process server on a random loopback port. Closing the window shuts down the server. `--port` overrides the port; `--browser` prints the URL and serves until Ctrl-C, defaulting to port 7480. Builds with `--no-default-features` always use this browser-only behavior. Select a step to see file diffs and model I/O; use `j` and `k` to move between steps, or toggle Raw JSON for full payloads. The URL hash keeps the selected run and step across reloads. All assets are embedded in the binary.
+The default `desktop` feature opens a native OS webview, without Electron. An in-process server listens on a random loopback port and stops when the window closes. `--port` overrides the port. `--browser` prints the URL and serves until Ctrl-C, using port 7480 by default. Builds with `--no-default-features` always use browser mode.
 
-Native windows serve the UI and API through a stable `tracelane` custom-protocol origin, keeping settings and pane widths across launches even when the underlying loopback port changes.
+Select a step to see file diffs and model I/O. Use `j` and `k` to move between steps, or toggle Raw JSON for full payloads. The URL hash keeps the selected run and step across reloads. All assets are embedded in the binary.
+
+Native windows use a stable `tracelane` origin for the UI and API, so settings and pane widths survive port changes between launches.
 
 ![Trace inspector showing a fork, a cached first step, and a multiline Rust diff](docs/ui.png)
 
