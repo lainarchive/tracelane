@@ -14,6 +14,9 @@ tracelane record --port 7474 --target https://api.openai.com -- my-command
 tracelane inspect <run-id>
 tracelane inspect <run-id> --step 3
 
+# Open the local trace inspector
+tracelane ui --port 7480
+
 # Restore the workspace to just before step 3
 tracelane replay <run-id> --from-step 3
 
@@ -43,4 +46,4 @@ cargo clippy --all-targets -- -D warnings
 
 ## Status
 
-Core CLI only. No web interface or SDK is included.
+CLI and local, dependency-free web inspector. The inspector serves the current workspace's traces at `http://127.0.0.1:7480`; run and step selections are preserved in the URL hash. Use `j` / `k` to move through steps. No SDK is included.

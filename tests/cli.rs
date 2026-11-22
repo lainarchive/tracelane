@@ -75,6 +75,23 @@ fn child_exit_code_and_environment_are_recorded() {
     let text = String::from_utf8(output.stdout).unwrap();
     assert!(text.contains("/v1 http://127.0.0.1:"), "{text}");
     assert!(text.contains("0 steps  exit 7"));
+    for line in text
+        .lines()
+        .filter(|line| line.contains("  run ") || line.contains("0 steps  exit"))
+    {
+        assert!(
+            line.as_bytes()[..8]
+                .iter()
+                .enumerate()
+                .all(|(i, c)| if i == 2 || i == 5 {
+                    *c == b':'
+                } else {
+                    c.is_ascii_digit()
+                }),
+            "{line}"
+        );
+        assert_eq!(&line[8..10], "  ");
+    }
     let store = Store::open(dir.path()).unwrap();
     let code: i32 = store
         .db

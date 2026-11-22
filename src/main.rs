@@ -13,6 +13,10 @@ struct Cli {
 }
 #[derive(Subcommand)]
 enum Command {
+    Ui {
+        #[arg(long, default_value_t = 7480)]
+        port: u16,
+    },
     Record {
         #[arg(long, default_value_t = 7474)]
         port: u16,
@@ -50,6 +54,17 @@ async fn run() -> Result<i32> {
     let root = std::env::current_dir()?;
     let store = Store::open(&root)?;
     let (command, target, port, parent) = match Cli::parse().command {
+        Command::Ui { port } => {
+            let server = tracelane::ui::start_ui(&root, port).await?;
+            println!(
+                "{}  inspector http://{}",
+                tracelane::output::timestamp(),
+                server.addr
+            );
+            tokio::signal::ctrl_c().await?;
+            server.shutdown().await?;
+            return Ok(0);
+        }
         Command::Inspect { run_id, step } => {
             tracelane::output::inspect(&store, &run_id, step)?;
             return Ok(0);
@@ -78,7 +93,10 @@ async fn run() -> Result<i32> {
                 .find(|s| s.index == from_step)
                 .ok_or("step not found")?;
             store.restore(&step.pre_snapshot_id)?;
-            println!("Restored {run_id} before step {from_step}");
+            println!(
+                "{}  Restored {run_id} before step {from_step}",
+                tracelane::output::timestamp()
+            );
             if command.is_empty() {
                 return Ok(0);
             }
@@ -98,7 +116,11 @@ async fn run() -> Result<i32> {
         parent.as_ref().map(|(id, n)| (id.as_str(), *n)),
     )?;
     let server = proxy::start_proxy(&root, &run, &target, port, parent).await?;
-    println!("run {run}  proxy http://{}  upstream {target}", server.addr);
+    println!(
+        "{}  run {run}  proxy http://{}  upstream {target}",
+        tracelane::output::timestamp(),
+        server.addr
+    );
     let status = tokio::process::Command::new(&command[0])
         .args(&command[1..])
         .env("OPENAI_BASE_URL", format!("http://{}/v1", server.addr))
@@ -114,8 +136,10 @@ async fn run() -> Result<i32> {
         }
     };
     proxy::finish_run(&store, &run, code)?;
+    println!();
     println!(
-        "{} steps  exit {code}  tracelane inspect {run}",
+        "{}  {} steps  exit {code}  tracelane inspect {run}",
+        tracelane::output::timestamp(),
         proxy::steps(&store, &run)?.len()
     );
     Ok(code)
