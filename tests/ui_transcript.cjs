@@ -164,3 +164,15 @@ test('stored content types distinguish literal data lines from SSE with a legacy
     assert.ok(parse({}, 'data: broken\n\n', 'text/event-stream').warning);
     assert.equal(parse({}, '', 'text/event-stream').response.text, 'No assistant text returned.');
 });
+
+test('Responses function calls render as tools alongside optional text', () => {
+    const call = { type: 'function_call', name: 'read_file', arguments: '{"path":"src/lib.rs"}' };
+    const onlyTools = parse({}, { output: [null, call] });
+    assert.equal(onlyTools.response.text, '');
+    assert.deepEqual(onlyTools.response.tools, [{ name: 'read_file', arguments: '{"path":"src/lib.rs"}' }]);
+    const mixed = parse({}, { output: [{ type: 'message', content: [{ type: 'output_text', text: 'Reading now.' }] }, call] });
+    assert.equal(mixed.response.text, 'Reading now.');
+    assert.equal(mixed.response.tools[0].name, 'read_file');
+    assert.deepEqual(parse({}, { output: [] }).response.tools, []);
+    assert.deepEqual(parse({}, { output: [null, { type: 'function_call' }] }).response.tools, [{ name: 'tool', arguments: '' }]);
+});

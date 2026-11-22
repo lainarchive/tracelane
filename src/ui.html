@@ -1205,7 +1205,14 @@
             ? response.choices.find((choice) => choice && (choice.index ?? 0) === 0)
             : undefined;
           answer = messageData(choice?.message || { role: 'assistant', content: response.content });
-          if (Array.isArray(response.output)) answer.text = outputText(response.output);
+          if (Array.isArray(response.output)) {
+            answer.text = outputText(response.output);
+            answer.tools.push(
+              ...response.output
+                .filter((item) => item?.type === 'function_call')
+                .map((item) => ({ name: item.name || 'tool', arguments: item.arguments || '' })),
+            );
+          }
           finish = choice?.finish_reason || response.stop_reason || response.status || '';
           usage = response.usage || {};
           if (
