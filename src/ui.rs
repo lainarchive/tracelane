@@ -72,17 +72,18 @@ fn runs(store: &Store) -> Result<Vec<Run>> {
     let mut stmt=store.db.prepare("SELECT id,parent_run_id,forked_from_step,command,started_at,exit_code,(SELECT count(*) FROM steps WHERE run_id=runs.id),target,finished_at FROM runs ORDER BY started_at DESC,id")?;
     Ok(stmt
         .query_map([], |r| {
+            let command: String = r.get(3)?;
+            let display_command = display_command(&command);
             Ok(Run {
                 id: r.get(0)?,
                 parent_run_id: r.get(1)?,
                 forked_from_step: r.get(2)?,
                 command: {
-                    let command: String = r.get(3)?;
                     serde_json::from_str::<Vec<String>>(&command)
                         .map(|args| args.join(" "))
                         .unwrap_or(command)
                 },
-                display_command: display_command(&r.get::<_, String>(3)?),
+                display_command,
                 started_at: r.get(4)?,
                 exit_code: r.get(5)?,
                 step_count: r.get(6)?,
