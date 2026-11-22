@@ -92,6 +92,12 @@
 }
 #runs {
   position: relative;
+  min-height: 160px;
+}
+@media (max-height: 700px) {
+  .run-summary {
+    display: none;
+  }
 }
 .fork-graph {
   position: absolute;
