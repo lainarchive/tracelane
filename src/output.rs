@@ -1,7 +1,14 @@
 use crate::{Result, inspect, proxy::Step, store::Store};
 use std::io::IsTerminal;
 
+fn sanitize(text: &str) -> String {
+    text.chars()
+        .filter(|c| !c.is_control() || matches!(c, '\n' | '\t'))
+        .collect()
+}
+
 pub fn paint(text: impl std::fmt::Display, code: &str) -> String {
+    let text = sanitize(&text.to_string());
     if std::io::stdout().is_terminal() && std::env::var_os("NO_COLOR").is_none() {
         format!("\x1b[{code}m{text}\x1b[0m")
     } else {
@@ -17,7 +24,7 @@ pub fn print_step(store: &Store, step: &Step) -> Result<()> {
         "{}  step {:>3}  {:<32}  {}  {:>6} ms  {}  +{} ~{} -{}",
         timestamp(),
         step.index,
-        format!("{} {}", step.method, step.path),
+        sanitize(&format!("{} {}", step.method, step.path)),
         paint(
             format!("{:>3}", step.status),
             if step.status < 300 { "32" } else { "31" }
@@ -42,7 +49,7 @@ pub fn inspect(store: &Store, run: &str, index: Option<u32>) -> Result<()> {
             .ok_or("step not found")?;
         for file in inspect::file_diffs(store, step)? {
             if let Some(note) = file.note {
-                println!("{}: {note}", file.path);
+                println!("{}: {note}", sanitize(&file.path));
                 continue;
             }
             println!("{}", paint(format!("--- a/{}", file.path), "31"));
@@ -65,11 +72,12 @@ pub fn inspect(store: &Store, run: &str, index: Option<u32>) -> Result<()> {
         let summary = inspect::summary(step);
         println!(
             "request: {}\nresponse: {}",
-            summary.request, summary.response
+            sanitize(&summary.request),
+            sanitize(&summary.response)
         );
     } else {
         if steps.is_empty() {
-            println!("No steps for run {run}");
+            println!("No steps for run {}", sanitize(run));
         }
         for step in steps {
             print_step(store, &step)?;

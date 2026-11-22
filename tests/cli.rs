@@ -2,6 +2,38 @@ use std::{fs, process::Command};
 use tracelane::{proxy::create_run, store::Store};
 
 #[test]
+fn inspect_strips_payload_controls_without_removing_tabs_or_newlines() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = Store::open(dir.path()).unwrap();
+    let pre = store.snapshot().unwrap();
+    fs::write(dir.path().join("file"), "safe\x1b[31m\x07\r\n\tend").unwrap();
+    let post = store.snapshot().unwrap();
+    let run = create_run(&store, "inspect", "http://localhost", None).unwrap();
+    let response =
+        serde_json::json!({"content":[{"text":"safe\x1b[31m\x07\r\n\tend"}]}).to_string();
+    store.db.execute("INSERT INTO steps VALUES (?1,1,'POST',?2,'{}',?3,200,0,?4,?5,0,'now','application/json')", rusqlite::params![run, "/v1/\x1b[31m\x07messages", response, pre, post]).unwrap();
+    for extra in [vec![], vec!["--step", "1"]] {
+        let output = Command::new(env!("CARGO_BIN_EXE_tracelane"))
+            .current_dir(dir.path())
+            .args(["inspect", &run])
+            .args(extra)
+            .output()
+            .unwrap();
+        assert!(output.status.success());
+        let text = String::from_utf8(output.stdout).unwrap();
+        assert!(
+            !text
+                .chars()
+                .any(|c| c.is_control() && c != '\n' && c != '\t'),
+            "{text:?}"
+        );
+        if text.contains("response:") {
+            assert!(text.contains("response: safe[31m\n\tend"), "{text:?}");
+        }
+    }
+}
+
+#[test]
 fn inspect_shows_file_diffs_summaries_and_missing_step_error() {
     let dir = tempfile::tempdir().unwrap();
     let store = Store::open(dir.path()).unwrap();
