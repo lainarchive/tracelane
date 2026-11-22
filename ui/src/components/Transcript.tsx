@@ -121,7 +121,24 @@ function ConversationView({ detail }: { detail: StepDetail }) {
   );
 }
 
-export function Transcript({ detail, raw }: { detail: StepDetail; raw: boolean }) {
+export function Transcript({
+  detail,
+  raw,
+  tab = 'conversation',
+}: {
+  detail: StepDetail;
+  raw: boolean;
+  tab?: 'conversation' | 'request' | 'response';
+}) {
+  if (!raw && tab !== 'conversation')
+    return (
+      <div id="io" className="io-body scroll">
+        <section className="message">
+          <div className="label">{tab}</div>
+          <HighlightedJson value={detail[tab]} />
+        </section>
+      </div>
+    );
   if (raw)
     return (
       <div id="io" className="io-body scroll">

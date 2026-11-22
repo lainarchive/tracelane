@@ -168,8 +168,8 @@ test('settings segments and swatches apply and persist appearance and diff prefe
   const dialog = within(screen.getByRole('dialog'));
   fireEvent.click(dialog.getByRole('radio', { name: /^Light$/ }));
   expect(document.documentElement.className).toBe('light');
-  fireEvent.click(dialog.getByRole('button', { name: 'Blue accent' }));
-  expect(document.documentElement.style.getPropertyValue('--selection')).toBe('#3b82f6');
+  fireEvent.click(dialog.getByRole('button', { name: 'Teal accent' }));
+  expect(document.documentElement.style.getPropertyValue('--selection')).toBe('#0f766e');
   fireEvent.click(dialog.getByRole('radio', { name: 'Comfortable' }));
   fireEvent.click(dialog.getByRole('radio', { name: 'Absolute' }));
   fireEvent.click(dialog.getByRole('switch', { name: 'Wrap long lines' }));
@@ -177,7 +177,7 @@ test('settings segments and swatches apply and persist appearance and diff prefe
   expect(JSON.parse(localStorage.getItem('tracelane.settings')!)).toMatchObject({
     theme: 'light',
     density: 'comfortable',
-    accent: '#3b82f6',
+    accent: '#2dd4bf',
     timestamps: 'absolute',
     diffWrap: true,
     showWhitespace: true,

@@ -8,15 +8,9 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { ToggleGroup } from 'radix-ui';
 import { motion, useReducedMotion } from 'motion/react';
-import type { Settings } from '@/lib/settings';
-
-const accents = [
-  { name: 'Blue', color: '#3b82f6' },
-  { name: 'Indigo', color: '#6366f1' },
-  { name: 'Slate', color: '#64748b' },
-  { name: 'Green', color: '#16a34a' },
-];
+import { accents, type Settings } from '@/lib/settings';
 const shortcuts = [
+  ['Command menu', ['⌘ / Ctrl', 'K']],
   ['Next/prev step', ['j', 'k']],
   ['Next/prev run', [']', '[']],
   ['Focus filter', ['/']],

@@ -20,7 +20,7 @@ test('settings round trip and validate each field independently', () => {
     diffWrap: true,
     showWhitespace: true,
     timestamps: 'absolute' as const,
-    accent: '#aabbcc',
+    accent: '#2dd4bf',
   };
   saveSettings(
     {
@@ -52,7 +52,8 @@ test('whitespace preference validates booleans and preserves older settings', ()
   expect(parseSettings('{"theme":"light"}').showWhitespace).toBe(false);
 });
 test('accent accepts swatch hex values and rejects CSS injection independently of theme', () => {
-  expect(parseSettings('{"accent":"#6366F1","theme":"light"}').accent).toBe('#6366F1');
+  expect(parseSettings('{"accent":"#FF7A1A","theme":"light"}').accent).toBe('#FF7A1A');
+  expect(parseSettings('{"accent":"#6366f1"}').accent).toBe('#ff7a1a');
   expect(parseSettings('{"accent":"red; color: transparent","theme":"light"}')).toEqual({
     ...defaultSettings,
     theme: 'light',

@@ -1,4 +1,4 @@
-import { Fragment, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import type { Diff } from '@/lib/types';
@@ -9,17 +9,35 @@ const changeClass = (file: Diff) =>
 export function DiffPanel({
   files,
   showWhitespace = false,
+  fileTarget,
+  onSelectFile,
 }: {
   files: Diff[];
   showWhitespace?: boolean;
+  fileTarget?: { path: string } | null;
+  onSelectFile?: (path: string) => void;
 }) {
   const [active, setActive] = useState(files[0]?.path);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const nodes = useRef(new Map<string, HTMLDivElement>());
   const hunks = useRef(new Map<string, HTMLDivElement>());
   const marks = minimapPositions(files);
+  useEffect(() => {
+    if (!fileTarget || !nodes.current.has(fileTarget.path)) return;
+    setActive(fileTarget.path);
+    setCollapsed((current) => {
+      const next = new Set(current);
+      next.delete(fileTarget.path);
+      return next;
+    });
+    const frame = requestAnimationFrame(() =>
+      nodes.current.get(fileTarget.path)?.scrollIntoView({ block: 'nearest' }),
+    );
+    return () => cancelAnimationFrame(frame);
+  }, [fileTarget]);
   function jump(path: string, hunk: number) {
     setActive(path);
+    onSelectFile?.(path);
     collapse(path, true);
     requestAnimationFrame(() =>
       hunks.current.get(`${path}/${hunk}`)?.scrollIntoView({ block: 'start' }),
@@ -45,6 +63,7 @@ export function DiffPanel({
               title={file.path}
               onClick={() => {
                 setActive(file.path);
+                onSelectFile?.(file.path);
                 collapse(file.path, true);
                 nodes.current.get(file.path)?.scrollIntoView({ block: 'start' });
               }}

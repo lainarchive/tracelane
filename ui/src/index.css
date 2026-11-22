@@ -2,6 +2,7 @@
 @import 'tw-animate-css';
 @import 'shadcn/tailwind.css';
 @import './inspector.css';
+@import './studio.css';
 
 @custom-variant dark (&:is(.dark *));
 @theme inline {
@@ -49,55 +50,64 @@
 .light {
   color-scheme: light;
   --radius: 0.75rem;
-  --background: #f3f4f6;
-  --foreground: #1f2937;
+  --background: #f5f5f5;
+  --foreground: #242426;
   --card: #ffffff;
   --card-foreground: var(--foreground);
   --popover: var(--card);
   --popover-foreground: var(--foreground);
   --primary: var(--selection);
   --primary-foreground: #ffffff;
-  --secondary: #f9fafb;
+  --secondary: #f0f0f1;
   --secondary-foreground: var(--foreground);
-  --muted: #f3f4f6;
-  --muted-foreground: #6b7280;
-  --accent: #f3f4f6;
+  --muted: #eeeeef;
+  --muted-foreground: #69696e;
+  --accent: #eeeeef;
   --accent-foreground: var(--foreground);
   --destructive: #dc2626;
-  --border: #e5e7eb;
-  --input: #e5e7eb;
+  --border: rgba(0, 0, 0, 0.09);
+  --input: rgba(0, 0, 0, 0.13);
   --ring: var(--selection);
-  --selection: #6366f1;
+  --selection: #c64b0c;
+  --selection-ink: #ffffff;
   --green: #087f5b;
   --red: #bd3f50;
-  --amber: #a36b20;
+  --amber: #0369a1;
   --added-fill: #ecfdf5;
   --deleted-fill: #fff1f2;
   --subtle: rgba(0, 0, 0, 0.025);
   --hover: rgba(0, 0, 0, 0.035);
-  --scrollbar: #cbd5e1;
-  --live: #0d9488;
+  --scrollbar: #c4c4c7;
+  --live: #0f766e;
+  --lane-0: #0f766e;
+  --lane-1: var(--selection);
+  --lane-2: #0369a1;
 }
 .dark {
   color-scheme: dark;
-  --background: #0f1115;
-  --foreground: #d1d5db;
-  --card: #16181d;
-  --secondary: #191b20;
-  --muted: #202228;
-  --muted-foreground: #818796;
-  --accent: #202228;
-  --border: rgba(255, 255, 255, 0.055);
+  --background: #0a0a0b;
+  --foreground: #ededed;
+  --card: #111113;
+  --secondary: #161618;
+  --muted: #1b1b1e;
+  --muted-foreground: #8a8a8e;
+  --accent: #1b1b1e;
+  --border: rgba(255, 255, 255, 0.07);
   --input: rgba(255, 255, 255, 0.075);
   --green: #8bc4aa;
   --red: #d89aab;
-  --amber: #c3a46e;
+  --amber: #38bdf8;
   --added-fill: rgba(16, 185, 129, 0.08);
   --deleted-fill: rgba(244, 63, 94, 0.08);
   --subtle: rgba(255, 255, 255, 0.015);
   --hover: rgba(255, 255, 255, 0.035);
-  --scrollbar: #374151;
-  --live: #4bb9ac;
+  --scrollbar: #3b3b40;
+  --live: #2dd4bf;
+  --selection: #ff7a1a;
+  --selection-ink: #0a0a0b;
+  --lane-0: #2dd4bf;
+  --lane-1: var(--selection);
+  --lane-2: #38bdf8;
 }
 @layer base {
   * {
