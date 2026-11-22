@@ -228,6 +228,7 @@ impl Session {
             for name in [
                 "host",
                 "content-length",
+                "accept-encoding",
                 "connection",
                 "transfer-encoding",
                 "upgrade",

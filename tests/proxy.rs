@@ -9,6 +9,39 @@ use tracelane::{
 };
 
 #[tokio::test]
+async fn forwarding_drops_accept_encoding_but_preserves_other_headers() {
+    let dir = tempfile::tempdir().unwrap();
+    let app = Router::new().route(
+        "/v1/messages",
+        post(|headers: axum::http::HeaderMap| async move {
+            assert!(!headers.contains_key("accept-encoding"));
+            assert_eq!(headers["x-request-id"], "test-request");
+            "uncompressed"
+        }),
+    );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let target = format!("http://{}", listener.local_addr().unwrap());
+    let server = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    let store = Store::open(dir.path()).unwrap();
+    let run = create_run(&store, "test", &target, None).unwrap();
+    let proxy = start_proxy(dir.path(), &run, &target, 0, None)
+        .await
+        .unwrap();
+    let response = reqwest::Client::new()
+        .post(format!("http://{}/v1/messages", proxy.addr))
+        .header("accept-encoding", "gzip, br")
+        .header("x-request-id", "test-request")
+        .body("{}")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 200);
+    assert_eq!(response.text().await.unwrap(), "uncompressed");
+    proxy.shutdown().await.unwrap();
+    server.abort();
+}
+
+#[tokio::test]
 async fn hybrid_replay_preserves_sse_and_forks_then_goes_live() {
     let dir = tempfile::tempdir().unwrap();
     let hits = Arc::new(AtomicUsize::new(0));
