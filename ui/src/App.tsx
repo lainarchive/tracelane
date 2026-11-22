@@ -33,9 +33,10 @@ const Empty = ({ children }: { children: React.ReactNode }) => (
 );
 
 function runTree(runs: Run[], query: string) {
+  const search = query.trim().toLowerCase();
   const visible = new Set<string>();
   const matches = runs.filter((run) =>
-    `${run.id} ${run.command}`.toLowerCase().includes(query.toLowerCase()),
+    `${run.id} ${run.command} ${run.target} ${run.parent_run_id ?? ''}`.toLowerCase().includes(search),
   );
   for (const run of matches) {
     let current: Run | undefined = run;

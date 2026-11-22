@@ -9,10 +9,10 @@ afterEach(() => {
   localStorage.clear();
 });
 
-test('malformed and unknown step hashes reset the current run to its first request', async () => {
+function mockInspector(parentId: string | null = null) {
   const run = {
     id: 'run',
-    parent_run_id: null,
+    parent_run_id: parentId,
     forked_from_step: null,
     command: 'true',
     display_command: 'true',
@@ -55,6 +55,10 @@ test('malformed and unknown step hashes reset the current run to its first reque
               };
     return { ok: true, json: async () => data };
   });
+}
+
+test('malformed and unknown step hashes reset the current run to its first request', async () => {
+  mockInspector();
   history.replaceState(null, '', '#run/2');
   render(<App />);
   const second = (await screen.findByText('02')).closest('button')!;
@@ -70,4 +74,19 @@ test('malformed and unknown step hashes reset the current run to its first reque
     fireEvent.keyDown(document.body, { key: 'j' });
     await waitFor(() => expect(second.getAttribute('aria-current')).toBe('step'));
   }
+});
+
+test('run filter trims whitespace and matches commands, ids, upstreams and parents', async () => {
+  mockInspector('parent-id');
+  history.replaceState(null, '', '#run/1');
+  const { container } = render(<App />);
+  await screen.findByText('02');
+  const filter = screen.getByRole('textbox', { name: 'Filter runs' });
+  for (const query of ['  TRUE  ', '  run  ', '  LOCALHOST  ', '  parent-id  ', '   ', '']) {
+    fireEvent.change(filter, { target: { value: query } });
+    expect(container.querySelectorAll('#runs .run')).toHaveLength(1);
+  }
+  fireEvent.change(filter, { target: { value: 'missing' } });
+  expect(container.querySelectorAll('#runs .run')).toHaveLength(0);
+  expect(container.querySelector('#runs')?.textContent).toContain('No matching runs');
 });
