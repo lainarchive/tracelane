@@ -2,6 +2,13 @@
 name = "tracelane"
 version = "0.1.0"
 edition = "2024"
+description = "Record model HTTP requests with workspace snapshots and replay from a chosen step"
+repository = "https://github.com/lainarchive/tracelane"
+license = "MIT"
+readme = "README.md"
+keywords = ["llm", "debugging", "replay", "cli", "snapshots"]
+categories = ["command-line-utilities", "development-tools::debugging"]
+exclude = ["docs/*.mp4", "docs/*.gif"]
 
 [features]
 default = ["desktop"]
