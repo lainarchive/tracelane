@@ -2,6 +2,30 @@ use std::fs;
 use tracelane::{proxy::create_run, store::Store, ui::start_ui};
 
 #[tokio::test]
+async fn inspector_reports_deleted_file_line_counts() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = Store::open(dir.path()).unwrap();
+    fs::write(dir.path().join("removed.txt"), "first\nsecond\n").unwrap();
+    let pre = store.snapshot().unwrap();
+    fs::remove_file(dir.path().join("removed.txt")).unwrap();
+    let post = store.snapshot().unwrap();
+    let run = create_run(&store, "delete", "http://localhost", None).unwrap();
+    store.db.execute("INSERT INTO steps VALUES (?1,1,'POST','/v1/messages','{}','{}',200,0,?2,?3,0,'now','application/json')", rusqlite::params![run,pre,post]).unwrap();
+    let server = start_ui(dir.path(), 0).await.unwrap();
+    let step: serde_json::Value =
+        reqwest::get(format!("http://{}/api/runs/{run}/steps/1", server.addr))
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+    assert_eq!(step["diffs"][0]["change"], "D");
+    assert_eq!(step["diffs"][0]["added_lines"], 0);
+    assert_eq!(step["diffs"][0]["deleted_lines"], 2);
+    server.shutdown().await.unwrap();
+}
+
+#[tokio::test]
 async fn inspector_serves_run_steps_structured_diff_and_missing_resources() {
     let dir = tempfile::tempdir().unwrap();
     let store = Store::open(dir.path()).unwrap();

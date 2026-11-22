@@ -28,7 +28,16 @@ fn instruction(messages: usize) -> Option<Value> {
         ),
         _ => return None,
     };
-    Some(json!({"path":path,"content":content}))
+    let mut action = json!({"path":path,"content":content});
+    if messages == 1 || messages == 3 {
+        let docs = if messages == 1 {
+            "# Greetings\n\nSmall greeting helpers for the demo workspace.\n\n- `greeting(name)` says hello.\n- `farewell(name)` says goodbye.\n"
+        } else {
+            "# Greetings\n\nSmall greeting helpers for the demo workspace.\n\n- `greeting(name)` trims whitespace and handles empty names.\n- `farewell(name)` trims whitespace before saying goodbye.\n\nRun `cargo test` to check the examples.\n"
+        };
+        action["edits"] = json!([{"path":"README.md","content":docs}]);
+    }
+    Some(action)
 }
 async fn respond(hits: Arc<AtomicUsize>, body: Value, anthropic: bool) -> Response {
     let messages = body["messages"].as_array().map_or(0, Vec::len);
@@ -50,10 +59,11 @@ async fn respond(hits: Arc<AtomicUsize>, body: Value, anthropic: bool) -> Respon
         return Json(json!({"id":"msg_mock","type":"message","role":"assistant","model":"mock-local","content":[{"type":"text","text":text}],"stop_reason":"end_turn","usage":{"input_tokens":0,"output_tokens":0}})).into_response();
     }
     if body["stream"] == true {
-        let chunk = json!({"id":"chatcmpl-mock","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"content":text},"finish_reason":null}]});
+        let chunk = json!({"id":"chatcmpl-mock","model":"mock-local","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"content":text},"finish_reason":null}]});
+        let finish = json!({"choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":128,"completion_tokens":96,"total_tokens":224}});
         return (
             [("content-type", "text/event-stream")],
-            format!("data: {chunk}\n\ndata: [DONE]\n\n"),
+            format!("data: {chunk}\n\ndata: {finish}\n\ndata: [DONE]\n\n"),
         )
             .into_response();
     }
@@ -97,6 +107,7 @@ mod tests {
     fn conversation_length_selects_repeatable_file_actions() {
         let first = super::instruction(1).unwrap();
         assert_eq!(first["path"], "src/lib.rs");
+        assert_eq!(first["edits"][0]["path"], "README.md");
         assert!(first["content"].as_str().unwrap().contains("Hello"));
         assert!(
             super::instruction(3).unwrap()["content"]
