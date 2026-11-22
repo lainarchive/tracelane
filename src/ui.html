@@ -1,68 +1,600 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Tracelane · Trace inspector</title>
-<style>
-:root{color-scheme:dark;--canvas:#0B0D11;--panel:#12151C;--well:#181C25;--border:rgba(255,255,255,0.08);--text:#D6DAE3;--muted:#8A919F;--accent:#5E6AD2}
-*{box-sizing:border-box}body{margin:0;background:var(--canvas);color:var(--text);font:13px -apple-system,"Segoe UI",system-ui,sans-serif;height:100vh;overflow:hidden}button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;text-align:left}button:focus-visible,a:focus-visible{outline:1px solid var(--muted);outline-offset:-2px}button:hover{background:var(--well)}.mono,pre,.number{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-variant-numeric:tabular-nums}.muted{color:var(--muted)}.label{font-size:10px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted)}.ellipsis{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}header{height:48px;display:flex;align-items:center;gap:20px;padding:0 18px;border-bottom:1px solid var(--border)}header strong{font-size:14px;font-weight:600}header .hint{margin-left:auto;color:var(--muted);font-size:12px}.layout{display:grid;grid-template-columns:240px 350px minmax(0,1fr);height:calc(100vh - 48px);gap:1px;background:var(--border)}aside,.timeline,.detail{min-width:0;min-height:0;background:var(--panel)}aside,.timeline{display:flex;flex-direction:column}.section-head{height:42px;min-height:42px;display:flex;align-items:center;gap:12px;padding:0 14px;border-bottom:1px solid var(--border)}.section-head .end{margin-left:auto}.scroll{overflow:auto;min-height:0;flex:1}.run{display:block;width:100%;padding:12px 14px;border-bottom:1px solid var(--border)}.run .command{margin:6px 0;color:var(--muted);font-size:12px}.run .meta{display:flex;gap:10px;color:var(--muted);font-size:11px}.fork{font-size:11px;color:var(--muted);margin-bottom:6px}.active{background:rgba(94,106,210,.12)!important;box-shadow:none;border-left:1px solid var(--accent)}.step{width:100%;display:grid;grid-template-columns:30px minmax(0,1fr) 42px;gap:8px;padding:13px 12px;border-bottom:1px solid var(--border)}.step .number{color:var(--muted);text-align:right}.step .status{text-align:right}.step .metrics{display:flex;gap:12px;margin-top:8px;font-size:11px;color:var(--muted)}.detail{display:grid;grid-template-rows:minmax(0,3fr) minmax(0,2fr)}.pane{display:flex;flex-direction:column;min-height:0;min-width:0}.pane+.pane{border-top:1px solid var(--border)}.diff-body{background:var(--well)}.file{border-bottom:1px solid var(--border)}.file-head{padding:10px 14px;background:var(--panel);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:1}.hunk{padding:7px 14px;color:var(--muted);font-size:11px;border-bottom:1px solid var(--border)}.diff-line{display:grid;grid-template-columns:42px 42px 20px minmax(0,1fr);line-height:21px;min-height:21px;white-space:pre;font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:12px;font-variant-numeric:tabular-nums}.diff-line .ln{color:var(--muted);text-align:right;padding-right:9px;user-select:none;border-right:1px solid var(--border)}.diff-line .sign{text-align:center}.diff-line .code{overflow:hidden;text-overflow:ellipsis;padding-right:12px}.insert{background:rgba(90,173,126,.12);color:#99CDAA}.delete{background:rgba(206,104,112,.12);color:#DFA0A6}.io-body{padding:14px;overflow:auto;background:var(--well);flex:1;min-height:0}pre{font-size:12px;line-height:1.65;white-space:pre-wrap;overflow-wrap:anywhere;margin:7px 0 18px}.raw-toggle{font-size:11px;padding:5px 7px;color:var(--muted);border:1px solid var(--border);border-radius:3px}.empty{padding:22px 14px;color:var(--muted);line-height:1.7}.snapshot{font-size:10px;color:var(--muted)}#notice{color:var(--muted);font-size:12px;max-width:40vw}#run-heading{padding:10px 14px;border-bottom:1px solid var(--border);font-size:11px;color:var(--muted)}[hidden]{display:none!important}@media(max-width:1000px){.layout{grid-template-columns:190px 280px minmax(0,1fr)}.snapshot{display:none}}
-</style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>tracelane · Inspector</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --canvas: #0B0D11;
+      --panel: #12151C;
+      --well: #181C25;
+      --border: rgba(255, 255, 255, 0.08);
+      --text: #D6DAE3;
+      --muted: #8A919F;
+      --accent: #5E6AD2;
+      --green: #99CDAA;
+      --red: #DFA0A6;
+      --amber: #C6B38C;
+      --sidebar: 224px;
+      --timeline: 304px;
+      --diff-size: 51%;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      height: 100vh;
+      overflow: hidden;
+      color: var(--text);
+      background: var(--canvas);
+      font: 13px -apple-system, "Segoe UI", system-ui, sans-serif;
+    }
+    button, input { font: inherit; color: inherit; }
+    button { border: 0; background: none; cursor: pointer; text-align: left; }
+    button:hover, a:hover { background: var(--well); }
+    button:focus-visible, input:focus-visible, a:focus-visible, summary:focus-visible,
+    [role="separator"]:focus-visible { outline: 1px solid var(--accent); outline-offset: -2px; }
+    a { color: inherit; text-underline-offset: 3px; }
+    .mono, pre, code, kbd {
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      font-variant-numeric: tabular-nums;
+    }
+    .muted { color: var(--muted); }
+    .added { color: var(--green); }
+    .modified, .warning { color: var(--amber); }
+    .deleted, .error { color: var(--red) !important; }
+    .label { color: var(--muted); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
+    .ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+    .scroll { overflow: auto; min-height: 0; min-width: 0; scrollbar-color: #343A46 transparent; scrollbar-width: thin; }
+    .empty { padding: 24px 18px; color: var(--muted); line-height: 1.7; }
+    [hidden] { display: none !important; }
+    .app-bar { display: flex; height: 38px; align-items: center; gap: 18px; padding: 0 16px; border-bottom: 1px solid var(--border); }
+    .wordmark { font-size: 14px; font-weight: 650; letter-spacing: -.5px; }
+    .workspace-path { padding-left: 18px; border-left: 1px solid var(--border); font-size: 11px; }
+    .keyboard-hint { margin-left: auto; font-size: 11px; white-space: nowrap; }
+    kbd { color: var(--text); font-size: 10px; }
+    .workspace { display: grid; grid-template-columns: var(--sidebar) 5px minmax(0, 1fr); height: calc(100vh - 38px); }
+    .sidebar, .timeline, .pane, .inspector, .detail { min-width: 0; min-height: 0; }
+    .sidebar, .timeline, .pane { display: flex; flex-direction: column; background: var(--panel); }
+    .section-head { display: flex; align-items: center; flex-shrink: 0; gap: 10px; min-height: 35px; padding: 0 14px; border-bottom: 1px solid var(--border); }
+    .section-head h2 { margin: 0; font: inherit; font-size: 11px; font-weight: 600; }
+    .end { margin-left: auto; }
+    .filter-wrap { padding: 10px; border-bottom: 1px solid var(--border); }
+    #filter { width: 100%; padding: 6px 8px; background: var(--canvas); border: 1px solid var(--border); border-radius: 3px; font-size: 11px; }
+    #filter::placeholder { color: var(--muted); }
+    #runs { flex: 1; }
+    .run-tree { margin: 0; padding: 0; list-style: none; }
+    .run-tree .run-tree { margin-left: 13px; border-left: 1px solid var(--border); }
+    .run-tree .run-tree > li { position: relative; }
+    .run-tree .run-tree > li::before { content: ""; position: absolute; top: 20px; width: 8px; border-top: 1px solid var(--border); }
+    .run { display: block; width: 100%; padding: 10px 12px; border-bottom: 1px solid var(--border); border-left: 2px solid transparent; }
+    .run-id { display: flex; align-items: center; gap: 7px; font-size: 11px; }
+    .exit-glyph { color: var(--muted); margin-left: auto; font-size: 12px; }
+    .command { margin: 5px 0 7px; font-size: 11px; color: #B3BAC7; }
+    .run-meta { display: flex; gap: 8px; color: var(--muted); font-size: 10px; }
+    .fork-note { font-size: 10px; color: var(--muted); margin-top: 4px; }
+    .active { background: rgba(94, 106, 210, .12) !important; border-left-color: var(--accent) !important; }
+    .sidebar-footer { padding: 12px; border-top: 1px solid var(--border); font-size: 10px; line-height: 1.8; color: var(--muted); }
+    .resizer { position: relative; touch-action: none; background: var(--canvas); z-index: 5; }
+    .resizer::after { content: ""; position: absolute; background: var(--border); }
+    .vertical { cursor: col-resize; }
+    .vertical::after { top: 0; bottom: 0; left: 2px; width: 1px; }
+    .horizontal { cursor: row-resize; }
+    .horizontal::after { left: 0; right: 0; top: 2px; height: 1px; }
+    .resizer:hover::after, .resizer:focus-visible::after { background: var(--accent); }
+    .inspector { display: grid; grid-template-rows: auto auto minmax(0, 1fr); }
+    .run-header { padding: 14px 18px 12px; border-bottom: 1px solid var(--border); }
+    .run-title { display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px; margin-bottom: 9px; }
+    .run-title h1 { font-size: 14px; font-weight: 500; margin: 0; }
+    .run-command { margin: 0 0 10px; font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 50px; overflow: auto; }
+    .run-facts { display: flex; flex-wrap: wrap; gap: 5px 19px; color: var(--muted); font-size: 11px; line-height: 1.7; }
+    .run-facts b { color: #BEC5D1; font-weight: 400; margin-left: 5px; }
+    #notice { font-size: 12px; background: var(--well); padding: 8px 18px; border-bottom: 1px solid var(--border); }
+    .columns { display: grid; grid-template-columns: var(--timeline) 5px minmax(0, 1fr); min-height: 0; }
+    #steps { flex: 1; }
+    .step {
+      display: grid;
+      position: relative;
+      width: 100%;
+      grid-template-columns: 23px minmax(0, 1fr) 29px 55px;
+      gap: 3px 7px;
+      padding: 7px 10px 6px;
+      border-bottom: 1px solid var(--border);
+      border-left: 2px solid transparent;
+      font-size: 10px;
+      line-height: 16px;
+    }
+    .step-index { color: var(--muted); grid-row: span 2; }
+    .endpoint { font-size: 11px; }
+    .step-status, .latency { text-align: right; }
+    .step-counts { grid-column: 2 / -1; display: flex; gap: 9px; font-size: 10px; }
+    .latency-track { position: absolute; height: 1px; left: 40px; right: 10px; bottom: 0; }
+    .latency-track span { display: block; height: 1px; background: #596170; }
+    .live-divider { display: flex; align-items: center; gap: 8px; padding: 12px 12px 8px; font-size: 10px; color: var(--muted); }
+    .live-divider::after { content: ""; height: 1px; flex: 1; background: var(--border); }
+    .timeline-footer { margin-top: auto; border-top: 1px solid var(--border); padding: 10px 12px; font-size: 10px; color: var(--muted); }
+    .detail { display: grid; grid-template-rows: minmax(100px, var(--diff-size)) 5px minmax(100px, 1fr); }
+    .snapshots { font-size: 10px; }
+    .file-list { display: flex; overflow-x: auto; flex-shrink: 0; min-height: 32px; border-bottom: 1px solid var(--border); background: var(--canvas); }
+    .file-tab { display: flex; align-items: center; flex-shrink: 0; gap: 8px; padding: 6px 12px; font-size: 10px; border-right: 1px solid var(--border); }
+    .file-tab .path { max-width: 220px; }
+    .diff-body { flex: 1; background: var(--well); position: relative; }
+    .file { border-bottom: 1px solid var(--border); }
+    .file-head {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      width: 100%;
+      padding: 8px 14px;
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+      font-size: 11px;
+      list-style: none;
+      cursor: pointer;
+    }
+    .file-head::-webkit-details-marker { display: none; }
+    .file-head::before { content: ">"; font-size: 10px; color: var(--muted); }
+    .file[open] > .file-head::before { transform: rotate(90deg); }
+    .file-code { overflow-x: auto; }
+    .diff-table { min-width: 100%; width: max-content; }
+    .hunk { padding: 5px 14px; color: var(--muted); font-size: 10px; background: rgba(255, 255, 255, .02); }
+    .diff-line { display: grid; grid-template-columns: 37px 37px 20px minmax(0, 1fr); min-height: 20px; line-height: 20px; white-space: pre; font-size: 11px; }
+    .ln { color: var(--muted); text-align: right; padding-right: 8px; user-select: none; border-right: 1px solid var(--border); }
+    .sign { text-align: center; user-select: none; }
+    .code { padding-right: 18px; }
+    .insert { background: rgba(90, 173, 126, .12); color: var(--green); }
+    .delete { background: rgba(206, 104, 112, .12); color: var(--red); }
+    .toggle { font-size: 10px; padding: 4px 8px; border: 1px solid var(--border); border-radius: 3px; color: var(--muted); }
+    .toggle[aria-pressed="true"] { color: var(--text); }
+    .io-meta { padding: 8px 16px; border-bottom: 1px solid var(--border); font-size: 10px; color: var(--muted); line-height: 1.5; }
+    .io-body { flex: 1; background: var(--canvas); }
+    pre { font-size: 11px; line-height: 1.65; margin: 7px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .message { padding: 13px 16px; border-bottom: 1px solid var(--border); }
+    .message-role { display: flex; gap: 10px; align-items: baseline; }
+    .message-body { max-width: 100%; }
+    .history > summary { padding: 10px 16px; color: var(--muted); cursor: pointer; font-size: 11px; border-bottom: 1px solid var(--border); }
+    .message-file { padding-top: 10px; color: var(--muted); font-size: 10px; }
+    .tool-call { margin-top: 8px; padding: 8px 10px; background: var(--well); border-left: 1px solid var(--border); }
+    .json-key { color: #BAC1D0; }
+    .json-string { color: #A4B4B1; }
+    .json-number { color: #BBB0C5; }
+    .json-literal { color: #9BA3B5; }
+    @media (max-width: 1300px) {
+      :root { --sidebar: 202px; --timeline: 275px; }
+      .run-header { padding: 11px 14px; }
+      .keyboard-hint .optional { display: none; }
+      .run-facts { gap: 3px 12px; }
+      .snapshots { font-size: 9px; }
+    }
+  </style>
 </head>
 <body>
-<header><strong>Tracelane</strong><span class="label">Trace inspector</span><span id="notice" role="status" class="ellipsis"></span><span class="hint"><span class="mono">j / k</span> navigate steps</span></header>
-<main class="layout">
-<aside aria-label="Runs"><div class="section-head"><span class="label">Runs</span><span class="end muted number" id="run-count"></span></div><nav id="runs" class="scroll"></nav></aside>
-<section class="timeline" aria-label="Step timeline"><div class="section-head"><span class="label">Steps</span><span id="step-count" class="end muted number"></span></div><div id="run-heading" class="mono ellipsis">Select a run</div><div id="steps" class="scroll"></div></section>
-<section class="detail" aria-label="Step details">
-<section class="pane"><div class="section-head"><span class="label">File Diff</span><span class="snapshot mono end" id="snapshots"></span></div><div id="diff" class="scroll diff-body"><div class="empty">Select a step to inspect workspace changes.</div></div></section>
-<section class="pane"><div class="section-head"><span class="label">Model I/O</span><button id="raw-toggle" class="raw-toggle end" aria-pressed="false">Raw JSON</button></div><div id="io" class="io-body"><div class="muted">Request and response details appear here.</div></div></section>
-</section>
-</main>
-<script>
-const $=id=>document.getElementById(id);
-let runs=[],currentRun=null,currentSteps=[],currentStep=null,detail=null,raw=false,runVersion=0,stepVersion=0;
-function el(tag,className,text){const node=document.createElement(tag);if(className)node.className=className;if(text!==undefined)node.textContent=text;return node}
-async function api(path){const response=await fetch(path);const data=await response.json();if(!response.ok)throw Error(data.error||'Unable to load trace');return data}
-function notice(error){$('notice').textContent=error?error.message:''}
-function empty(node,message){node.replaceChildren(el('div','empty',message))}
-function renderRuns(){
- $('run-count').textContent=runs.length;$('runs').replaceChildren();const visited=new Set();
- function append(run,depth){if(visited.has(run.id))return;visited.add(run.id);const button=el('button','run'+(run.id===currentRun?' active':''));button.style.paddingLeft=(14+Math.min(depth,5)*14)+'px';button.setAttribute('aria-current',run.id===currentRun?'true':'false');
-  if(run.parent_run_id)button.append(el('div','fork','fork @ step '+run.forked_from_step));
-  button.append(el('div','mono',run.id));const command=el('div','command ellipsis',run.command);command.title=run.command;button.append(command);
-  const meta=el('div','meta');meta.append(el('span','number',run.step_count+' steps'),el('span','number',run.exit_code===null?'unfinished':'exit '+run.exit_code));button.append(meta);button.onclick=()=>selectRun(run.id);$('runs').append(button);runs.filter(r=>r.parent_run_id===run.id).forEach(r=>append(r,depth+1));
- }
- runs.filter(r=>!runs.some(p=>p.id===r.parent_run_id)).forEach(r=>append(r,0));runs.forEach(r=>append(r,0));if(!runs.length)empty($('runs'),'No runs recorded in this workspace.');
-}
-function renderSteps(){
- $('step-count').textContent=currentSteps.length;$('steps').replaceChildren();
- for(const step of currentSteps){const button=el('button','step'+(step.step_index===currentStep?' active':''));button.setAttribute('aria-current',step.step_index===currentStep?'step':'false');button.append(el('span','number',String(step.step_index).padStart(2,'0')));const body=el('div');const endpoint=el('div','mono ellipsis',step.endpoint);endpoint.title=step.endpoint;body.append(endpoint);const metrics=el('div','metrics mono');metrics.append(el('span','',step.latency_ms+' ms'),el('span','',`+${step.files.added} ~${step.files.modified} -${step.files.deleted}`));if(step.cached)metrics.append(el('span','','cached'));body.append(metrics);button.append(body,el('span','status number',step.status));button.onclick=()=>selectStep(step.step_index);$('steps').append(button)}
- if(!currentSteps.length)empty($('steps'),'This run has no recorded steps.');
-}
-function setHash(){const hash=currentRun?encodeURIComponent(currentRun)+(currentStep?'/'+currentStep:''):'';history.replaceState(null,'','#'+hash)}
-async function selectRun(id,requested){
- const version=++runVersion;++stepVersion;currentRun=id;currentStep=null;currentSteps=[];detail=null;notice();renderRuns();renderSteps();$('run-heading').textContent=id;empty($('diff'),'Loading steps…');$('io').replaceChildren();$('snapshots').textContent='';
- try{const data=await api('/api/runs/'+encodeURIComponent(id));if(version!==runVersion)return;currentSteps=data.steps;const first=currentSteps.find(s=>s.step_index===requested)||currentSteps[0];if(first)await selectStep(first.step_index);else{renderSteps();empty($('diff'),'No workspace changes to display.');setHash()}}
- catch(error){if(version===runVersion){notice(error);empty($('diff'),'Unable to load this run.')}}
-}
-async function selectStep(index){
- const version=++stepVersion;const run=currentRun;currentStep=index;detail=null;notice();setHash();renderSteps();const active=$('steps').querySelector('.active');if(active)active.scrollIntoView({block:'nearest'});empty($('diff'),'Loading diff…');$('io').replaceChildren();const step=currentSteps.find(s=>s.step_index===index);$('snapshots').textContent=step?step.pre_snapshot_id+' → '+step.post_snapshot_id:'';
- try{const data=await api('/api/runs/'+encodeURIComponent(run)+'/steps/'+index);if(version!==stepVersion||run!==currentRun)return;detail=data;renderDiff();renderIO()}
- catch(error){if(version===stepVersion){notice(error);empty($('diff'),'Unable to load this step.')}}
-}
-function renderDiff(){
- $('diff').replaceChildren();for(const file of detail.diffs){const section=el('section','file');const heading=el('div','file-head mono ellipsis',file.path);heading.title=file.path;section.append(heading);if(file.note)section.append(el('div','empty',file.note));for(const hunk of file.hunks){section.append(el('div','hunk mono',hunk.header));for(const line of hunk.lines){const row=el('div','diff-line '+line.kind);row.append(el('span','ln',line.old_line??''),el('span','ln',line.new_line??''),el('span','sign',line.kind==='insert'?'+':line.kind==='delete'?'-':' '));const code=el('span','code',line.text.replace(/\n$/,''));code.title=line.text;row.append(code);section.append(row)}}$('diff').append(section)}if(!detail.diffs.length)empty($('diff'),'No files changed during this request.');$('diff').scrollTop=0;
-}
-function renderIO(){
- $('raw-toggle').setAttribute('aria-pressed',String(raw));$('raw-toggle').textContent=raw?'Show summary':'Raw JSON';$('io').replaceChildren();if(!detail)return;
- for(const name of ['request','response']){$('io').append(el('div','label',name),el('pre','',raw?JSON.stringify(detail[name],null,2):detail.summary[name]))}$('io').scrollTop=0;
-}
-$('raw-toggle').onclick=()=>{raw=!raw;renderIO()};
-document.addEventListener('keydown',event=>{if(event.altKey||event.ctrlKey||event.metaKey||/INPUT|TEXTAREA|SELECT/.test(event.target.tagName)||event.target.isContentEditable)return;if(!['j','k'].includes(event.key)||!currentSteps.length)return;event.preventDefault();const index=currentSteps.findIndex(s=>s.step_index===currentStep);const next=Math.max(0,Math.min(currentSteps.length-1,index+(event.key==='j'?1:-1)));if(next!==index)selectStep(currentSteps[next].step_index)});
-function fromHash(){try{const [id,step]=location.hash.slice(1).split('/');const run=runs.find(r=>r.id===decodeURIComponent(id||''))||runs[0];if(run)selectRun(run.id,Number(step))}catch{if(runs[0])selectRun(runs[0].id)}}
-window.addEventListener('hashchange',fromHash);
-api('/api/runs').then(data=>{runs=data;renderRuns();fromHash()}).catch(error=>{notice(error);empty($('runs'),'Unable to load runs.')});
-</script>
+  <header class="app-bar">
+    <strong class="wordmark">tracelane</strong>
+    <span id="workspace" class="workspace-path mono muted ellipsis">Loading workspace…</span>
+    <span class="keyboard-hint muted"><kbd>j k</kbd> steps <span class="optional">&nbsp; <kbd>[ ]</kbd> runs</span> &nbsp; <kbd>/</kbd> filter &nbsp; <kbd>r</kbd> raw</span>
+  </header>
+  <main class="workspace" id="workspace-layout">
+    <aside class="sidebar" aria-label="Runs">
+      <div class="section-head"><h2>Runs</h2><span class="end muted mono" id="run-count"></span></div>
+      <div class="filter-wrap"><input id="filter" type="search" aria-label="Filter runs" placeholder="Filter runs…" autocomplete="off"></div>
+      <nav id="runs" class="scroll" aria-label="Recorded runs"><div class="empty">Loading runs…</div></nav>
+      <div class="sidebar-footer">LOCAL WORKSPACE<br>Requests and file changes, side by side.</div>
+    </aside>
+    <div class="resizer vertical" data-resize="sidebar" role="separator" tabindex="0" aria-label="Resize runs sidebar" aria-orientation="vertical"></div>
+    <section class="inspector" aria-label="Run inspector">
+      <header class="run-header" id="run-header"><div class="empty">Choose a run to inspect its requests.</div></header>
+      <div id="notice" role="status" hidden></div>
+      <div class="columns" id="columns">
+        <section class="timeline" aria-label="Step timeline">
+          <div class="section-head"><h2>Requests</h2><span id="step-count" class="end mono muted"></span></div>
+          <nav id="steps" class="scroll" aria-label="Requests"></nav>
+          <div class="timeline-footer mono" id="timeline-footer">j / k to move between requests</div>
+        </section>
+        <div class="resizer vertical" data-resize="timeline" role="separator" tabindex="0" aria-label="Resize request timeline" aria-orientation="vertical"></div>
+        <section class="detail" id="detail" aria-label="Step details">
+          <section class="pane" aria-label="File Diff">
+            <div class="section-head"><h2>File Diff</h2><span id="diff-count" class="muted mono"></span><span class="snapshots end muted mono" id="snapshots"></span></div>
+            <nav class="file-list" id="file-list" aria-label="Changed files" hidden></nav>
+            <div id="diff" class="scroll diff-body"><div class="empty">Select a request to compare its workspace snapshots.</div></div>
+          </section>
+          <div class="resizer horizontal" data-resize="diff" role="separator" tabindex="0" aria-label="Resize diff and model panes" aria-orientation="horizontal"></div>
+          <section class="pane" aria-label="Model I/O">
+            <div class="section-head"><h2>Model I/O</h2><span class="muted label">Transcript</span><button id="raw-toggle" class="toggle end" aria-pressed="false" title="Toggle raw JSON (r)">Raw</button></div>
+            <div id="io-meta" class="io-meta" hidden></div>
+            <div id="io" class="io-body scroll"><div class="empty">The request and response will appear here.</div></div>
+          </section>
+        </section>
+      </div>
+    </section>
+  </main>
+  <script>
+    const $ = id => document.getElementById(id);
+    const root = document.documentElement;
+    let runs = [], orderedRuns = [], currentRun = null, currentSteps = [], currentStep = null;
+    let detail = null, raw = false, runVersion = 0, stepVersion = 0;
+
+    function el(tag, className = '', text) {
+      const node = document.createElement(tag);
+      node.className = className;
+      if (text !== undefined) node.textContent = text;
+      return node;
+    }
+
+    async function api(path) {
+      const response = await fetch(path);
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw Error(error.error || `Request failed (${response.status})`);
+      }
+      return response.json();
+    }
+
+    function notice(error) {
+      $('notice').hidden = !error;
+      $('notice').textContent = error ? error.message + ' — reload to try again.' : '';
+    }
+
+    function empty(node, message) {
+      node.replaceChildren(el('div', 'empty', message));
+    }
+
+    function relativeTime(value) {
+      const seconds = Math.max(0, (Date.now() - Date.parse(value)) / 1000);
+      if (!Number.isFinite(seconds)) return 'Unknown time';
+      if (seconds < 60) return 'just now';
+      if (seconds < 3600) return Math.floor(seconds / 60) + 'm ago';
+      if (seconds < 86400) return Math.floor(seconds / 3600) + 'h ago';
+      return Math.floor(seconds / 86400) + 'd ago';
+    }
+
+    function duration(ms) {
+      if (!Number.isFinite(ms)) return '—';
+      return ms < 1000 ? Math.round(ms) + ' ms' : (ms / 1000).toFixed(2) + ' s';
+    }
+
+    function renderRuns() {
+      const query = $('filter').value.trim().toLowerCase();
+      const matches = run => `${run.id} ${run.command} ${run.target}`.toLowerCase().includes(query);
+      const visible = new Set(runs.filter(matches).map(run => run.id));
+      for (const id of [...visible]) {
+        let parent = runs.find(run => run.id === id)?.parent_run_id;
+        const seen = new Set([id]);
+        while (parent && !seen.has(parent)) {
+          seen.add(parent);
+          visible.add(parent);
+          parent = runs.find(run => run.id === parent)?.parent_run_id;
+        }
+      }
+      $('runs').replaceChildren();
+      $('run-count').textContent = query ? `${runs.filter(matches).length} / ${runs.length}` : runs.length;
+      orderedRuns = [];
+      const visited = new Set();
+      function append(run, list) {
+        if (visited.has(run.id) || !visible.has(run.id)) return;
+        visited.add(run.id);
+        orderedRuns.push(run);
+        const item = el('li');
+        const button = el('button', 'run' + (currentRun === run.id ? ' active' : ''));
+        button.setAttribute('aria-current', currentRun === run.id ? 'true' : 'false');
+        const title = el('div', 'run-id mono', run.id);
+        const failed = run.exit_code !== null && run.exit_code !== 0;
+        const glyph = el('span', 'exit-glyph' + (failed ? ' error' : ''), run.exit_code === null ? '◦' : failed ? '×' : '·');
+        glyph.title = run.exit_code === null ? 'Running' : 'Exit ' + run.exit_code;
+        glyph.setAttribute('aria-label', glyph.title);
+        title.append(glyph);
+        const command = el('div', 'command ellipsis mono', run.command);
+        command.title = run.command;
+        const meta = el('div', 'run-meta');
+        meta.append(el('span', '', relativeTime(run.started_at)), el('span', 'mono', run.step_count + ' steps'));
+        button.append(title, command, meta);
+        if (run.parent_run_id) button.append(el('div', 'fork-note', 'fork @ step ' + run.forked_from_step));
+        button.onclick = () => selectRun(run.id);
+        item.append(button);
+        const children = el('ul', 'run-tree');
+        runs.filter(child => child.parent_run_id === run.id).forEach(child => append(child, children));
+        if (children.childElementCount) item.append(children);
+        list.append(item);
+      }
+      const list = el('ul', 'run-tree');
+      runs.filter(run => !runs.some(parent => parent.id === run.parent_run_id)).forEach(run => append(run, list));
+      runs.forEach(run => append(run, list));
+      $('runs').append(list);
+      if (!orderedRuns.length) empty($('runs'), runs.length ? 'No matching runs. Try another command or run id.' : 'No runs yet. Record a command in this workspace to get started.');
+    }
+
+    function renderRunHeader(run) {
+      const header = $('run-header');
+      header.replaceChildren();
+      const title = el('div', 'run-title');
+      title.append(el('span', 'label', 'Run'), el('h1', 'mono', run.id));
+      if (run.parent_run_id) {
+        const parent = el('a', 'muted mono', `forked from ${run.parent_run_id} @ step ${run.forked_from_step}`);
+        parent.href = '#' + encodeURIComponent(run.parent_run_id) + '/' + run.forked_from_step;
+        title.append(parent);
+      }
+      header.append(title, el('pre', 'run-command', run.command));
+      const facts = el('div', 'run-facts');
+      function fact(label, value) {
+        const node = el('span', '', label);
+        node.append(el('b', 'mono', value));
+        facts.append(node);
+        return node;
+      }
+      const started = new Date(run.started_at);
+      fact('Started', Number.isNaN(+started) ? 'Unknown' : started.toLocaleTimeString() + ' · ' + relativeTime(run.started_at)).title = run.started_at;
+      fact('Duration', duration(Math.max(0, Date.parse(run.finished_at || new Date().toISOString()) - Date.parse(run.started_at))));
+      const exit = fact('Exit', run.exit_code === null ? 'running' : run.exit_code);
+      if (run.exit_code !== null && run.exit_code !== 0) exit.querySelector('b').classList.add('error');
+      fact('Steps', run.step_count);
+      fact('Total latency', duration(currentSteps.reduce((sum, step) => sum + step.latency_ms, 0)));
+      fact('Upstream', run.target);
+      header.append(facts);
+    }
+
+    function renderSteps() {
+      $('steps').replaceChildren();
+      $('step-count').textContent = currentSteps.length;
+      const run = runs.find(run => run.id === currentRun);
+      const max = Math.max(1, ...currentSteps.map(step => step.latency_ms));
+      for (const step of currentSteps) {
+        if (run?.parent_run_id && step.step_index === run.forked_from_step) {
+          $('steps').append(el('div', 'live-divider mono', 'live from step ' + run.forked_from_step));
+        }
+        const button = el('button', 'step mono' + (step.step_index === currentStep ? ' active' : ''));
+        button.setAttribute('aria-current', step.step_index === currentStep ? 'step' : 'false');
+        const endpoint = el('span', 'endpoint ellipsis', step.endpoint);
+        endpoint.title = step.endpoint;
+        button.append(el('span', 'step-index', String(step.step_index).padStart(2, '0')), endpoint,
+          el('span', 'step-status ' + (step.status >= 400 ? 'error' : step.status >= 300 ? 'warning' : 'muted'), step.status),
+          el('span', 'latency muted', step.latency_ms + ' ms'));
+        const counts = el('div', 'step-counts');
+        counts.append(el('span', 'added', '+' + step.files.added), el('span', 'modified', '~' + step.files.modified), el('span', 'deleted', '-' + step.files.deleted));
+        if (step.cached) counts.append(el('span', 'muted', 'cached'));
+        const track = el('div', 'latency-track');
+        const bar = el('span');
+        bar.style.width = (step.latency_ms / max * 100) + '%';
+        track.append(bar);
+        button.append(counts, track);
+        button.onclick = () => selectStep(step.step_index);
+        $('steps').append(button);
+      }
+      if (!currentSteps.length) empty($('steps'), 'This run has no recorded requests.');
+      $('timeline-footer').textContent = `${currentSteps.filter(step => step.cached).length} cached · ${currentSteps.filter(step => !step.cached).length} live`;
+    }
+
+    function setHash() {
+      const hash = currentRun ? encodeURIComponent(currentRun) + (currentStep ? '/' + currentStep : '') : '';
+      history.replaceState(null, '', '#' + hash);
+    }
+
+    function clearStep(message) {
+      detail = null;
+      empty($('diff'), message);
+      empty($('io'), message);
+      $('snapshots').textContent = '';
+      $('diff-count').textContent = '';
+      $('file-list').replaceChildren();
+      $('file-list').hidden = true;
+      $('io-meta').hidden = true;
+    }
+
+    async function selectRun(id, requested) {
+      const version = ++runVersion;
+      ++stepVersion;
+      currentRun = id;
+      currentStep = null;
+      currentSteps = [];
+      notice();
+      renderRuns();
+      renderSteps();
+      empty($('run-header'), 'Loading run…');
+      clearStep('Loading run…');
+      try {
+        const data = await api('/api/runs/' + encodeURIComponent(id));
+        if (version !== runVersion) return;
+        currentSteps = data.steps;
+        renderRunHeader(data.run);
+        const first = currentSteps.find(step => step.step_index === requested) || currentSteps[0];
+        if (first) await selectStep(first.step_index);
+        else {
+          renderSteps();
+          clearStep('This run has no recorded requests.');
+          setHash();
+        }
+      } catch (error) {
+        if (version !== runVersion) return;
+        notice(error);
+        empty($('run-header'), 'Unable to load this run.');
+        clearStep('Unable to load this run. Reload to try again.');
+      }
+    }
+
+    async function selectStep(index) {
+      const version = ++stepVersion;
+      const run = currentRun;
+      currentStep = index;
+      notice();
+      setHash();
+      renderSteps();
+      $('steps').querySelector('.active')?.scrollIntoView({ block: 'nearest' });
+      clearStep('Loading request…');
+      const step = currentSteps.find(step => step.step_index === index);
+      if (step) $('snapshots').textContent = step.pre_snapshot_id + ' → ' + step.post_snapshot_id;
+      try {
+        const data = await api('/api/runs/' + encodeURIComponent(run) + '/steps/' + index);
+        if (version !== stepVersion || run !== currentRun) return;
+        detail = data;
+        renderDiff();
+        renderIO();
+      } catch (error) {
+        if (version !== stepVersion) return;
+        notice(error);
+        clearStep('Unable to load this request. Choose another step or reload.');
+      }
+    }
+
+    function renderDiff() {
+      $('diff').replaceChildren();
+      $('file-list').replaceChildren();
+      $('file-list').hidden = !detail.diffs.length;
+      $('diff-count').textContent = detail.diffs.length + ' files';
+      for (const file of detail.diffs) {
+        const section = el('details', 'file');
+        section.open = true;
+        const type = file.change === 'A' ? 'added' : file.change === 'D' ? 'deleted' : 'modified';
+        const tab = el('button', 'file-tab mono');
+        tab.append(el('span', type, file.change), el('span', 'path ellipsis', file.path), el('span', 'added', '+' + file.added_lines), el('span', 'deleted', '-' + file.deleted_lines));
+        tab.title = file.path;
+        tab.onclick = () => {
+          section.open = true;
+          $('diff').scrollTo({ top: section.offsetTop });
+        };
+        $('file-list').append(tab);
+        const heading = el('summary', 'file-head mono');
+        heading.append(el('span', type, file.change), el('span', 'ellipsis', file.path), el('span', 'end added', '+' + file.added_lines), el('span', 'deleted', '-' + file.deleted_lines));
+        heading.title = file.path;
+        section.append(heading);
+        if (file.note) section.append(el('div', 'empty', file.note));
+        const code = el('div', 'file-code');
+        const table = el('div', 'diff-table mono');
+        for (const hunk of file.hunks) {
+          table.append(el('div', 'hunk', hunk.header));
+          for (const line of hunk.lines) {
+            const row = el('div', 'diff-line ' + line.kind);
+            row.append(el('span', 'ln', line.old_line ?? ''), el('span', 'ln', line.new_line ?? ''),
+              el('span', 'sign', line.kind === 'insert' ? '+' : line.kind === 'delete' ? '-' : ' '),
+              el('span', 'code', line.text.replace(/\n$/, '')));
+            table.append(row);
+          }
+        }
+        code.append(table);
+        section.append(code);
+        $('diff').append(section);
+      }
+      if (!detail.diffs.length) empty($('diff'), 'No file changes in this step.');
+      $('diff').scrollTop = 0;
+    }
+
+    function renderIO() {
+      $('raw-toggle').setAttribute('aria-pressed', String(raw));
+      $('io').replaceChildren();
+      if (!detail) return;
+      for (const name of ['request', 'response']) {
+        const block = el('section', 'message');
+        block.append(el('div', 'label', name), el('pre', '', raw ? JSON.stringify(detail[name], null, 2) : detail.summary[name]));
+        $('io').append(block);
+      }
+    }
+
+    function toggleRaw() {
+      raw = !raw;
+      renderIO();
+    }
+
+    function savedSizes() {
+      try { return JSON.parse(localStorage.getItem('tracelane.panes') || '{}') || {}; }
+      catch { return {}; }
+    }
+
+    function resizePane(name, value) {
+      if (name === 'sidebar') value = Math.max(170, Math.min(value, window.innerWidth - 760));
+      if (name === 'timeline') value = Math.max(240, Math.min(value, $('columns').clientWidth - 425));
+      if (name === 'diff') value = Math.max(22, Math.min(76, value));
+      if (!Number.isFinite(value)) return;
+      root.style.setProperty('--' + (name === 'diff' ? 'diff-size' : name), value + (name === 'diff' ? '%' : 'px'));
+      try {
+        const sizes = savedSizes();
+        sizes[name] = value;
+        localStorage.setItem('tracelane.panes', JSON.stringify(sizes));
+      } catch {}
+    }
+
+    for (const [name, value] of Object.entries(savedSizes())) {
+      if (['sidebar', 'timeline', 'diff'].includes(name)) resizePane(name, Number(value));
+    }
+    for (const separator of document.querySelectorAll('[data-resize]')) {
+      separator.addEventListener('pointerdown', event => {
+        if (event.button !== 0) return;
+        event.preventDefault();
+        separator.setPointerCapture(event.pointerId);
+        const move = event => {
+          const name = separator.dataset.resize;
+          if (name === 'sidebar') resizePane(name, event.clientX);
+          if (name === 'timeline') resizePane(name, event.clientX - $('columns').getBoundingClientRect().left);
+          if (name === 'diff') {
+            const bounds = $('detail').getBoundingClientRect();
+            resizePane(name, (event.clientY - bounds.top) / bounds.height * 100);
+          }
+        };
+        separator.addEventListener('pointermove', move);
+        separator.addEventListener('lostpointercapture', () => separator.removeEventListener('pointermove', move), { once: true });
+        separator.addEventListener('pointerup', () => separator.releasePointerCapture(event.pointerId), { once: true });
+      });
+      separator.addEventListener('keydown', event => {
+        if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return;
+        event.preventDefault();
+        const name = separator.dataset.resize;
+        const delta = event.key === 'ArrowLeft' || event.key === 'ArrowUp' ? -1 : 1;
+        const value = name === 'diff' ? $('detail').firstElementChild.clientHeight / $('detail').clientHeight * 100 : name === 'sidebar' ? document.querySelector('.sidebar').clientWidth : document.querySelector('.timeline').clientWidth;
+        resizePane(name, value + delta * (name === 'diff' ? 3 : 12));
+      });
+    }
+    window.addEventListener('resize', () => {
+      const sizes = savedSizes();
+      if (sizes.sidebar) resizePane('sidebar', sizes.sidebar);
+      if (sizes.timeline) resizePane('timeline', sizes.timeline);
+    });
+    $('filter').addEventListener('input', renderRuns);
+    $('filter').addEventListener('keydown', event => {
+      if (event.key === 'Escape') {
+        $('filter').value = '';
+        renderRuns();
+        $('filter').blur();
+      }
+    });
+    $('raw-toggle').onclick = toggleRaw;
+    document.addEventListener('keydown', event => {
+      if (event.altKey || event.ctrlKey || event.metaKey || /INPUT|TEXTAREA|SELECT/.test(event.target.tagName) || event.target.isContentEditable) return;
+      if (!['j', 'k', '[', ']', '/', 'r'].includes(event.key)) return;
+      event.preventDefault();
+      if (event.key === '/') return $('filter').focus();
+      if (event.key === 'r') return toggleRaw();
+      if (['[', ']'].includes(event.key)) {
+        const index = orderedRuns.findIndex(run => run.id === currentRun);
+        const next = Math.max(0, Math.min(orderedRuns.length - 1, index + (event.key === ']' ? 1 : -1)));
+        if (orderedRuns[next]) selectRun(orderedRuns[next].id);
+        return;
+      }
+      const index = currentSteps.findIndex(step => step.step_index === currentStep);
+      const next = Math.max(0, Math.min(currentSteps.length - 1, index + (event.key === 'j' ? 1 : -1)));
+      if (currentSteps[next] && next !== index) selectStep(currentSteps[next].step_index);
+    });
+
+    function fromHash() {
+      try {
+        const [id, step] = location.hash.slice(1).split('/');
+        const run = runs.find(run => run.id === decodeURIComponent(id || '')) || runs[0];
+        if (run) selectRun(run.id, Number(step));
+      } catch {
+        if (runs[0]) selectRun(runs[0].id);
+      }
+    }
+    window.addEventListener('hashchange', fromHash);
+    api('/api/workspace').then(data => {
+      $('workspace').textContent = data.path;
+      $('workspace').title = data.path;
+    }).catch(error => { $('workspace').textContent = 'Workspace unavailable'; notice(error); });
+    api('/api/runs').then(data => {
+      runs = data;
+      renderRuns();
+      fromHash();
+      if (!runs.length) clearStep('Record a run to inspect file changes and model messages.');
+    }).catch(error => { notice(error); empty($('runs'), 'Unable to load runs. Reload to try again.'); });
+  </script>
 </body>
 </html>

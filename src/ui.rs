@@ -20,6 +20,8 @@ struct Run {
     started_at: String,
     exit_code: Option<i32>,
     step_count: u32,
+    target: String,
+    finished_at: Option<String>,
 }
 type Shared = Arc<Mutex<Store>>;
 type ApiResult = std::result::Result<Json<Value>, (StatusCode, Json<Value>)>;
@@ -36,7 +38,7 @@ fn missing() -> (StatusCode, Json<Value>) {
     )
 }
 fn runs(store: &Store) -> Result<Vec<Run>> {
-    let mut stmt=store.db.prepare("SELECT id,parent_run_id,forked_from_step,command,started_at,exit_code,(SELECT count(*) FROM steps WHERE run_id=runs.id) FROM runs ORDER BY started_at DESC,id")?;
+    let mut stmt=store.db.prepare("SELECT id,parent_run_id,forked_from_step,command,started_at,exit_code,(SELECT count(*) FROM steps WHERE run_id=runs.id),target,finished_at FROM runs ORDER BY started_at DESC,id")?;
     Ok(stmt
         .query_map([], |r| {
             Ok(Run {
@@ -52,6 +54,8 @@ fn runs(store: &Store) -> Result<Vec<Run>> {
                 started_at: r.get(4)?,
                 exit_code: r.get(5)?,
                 step_count: r.get(6)?,
+                target: r.get(7)?,
+                finished_at: r.get(8)?,
             })
         })?
         .collect::<std::result::Result<_, _>>()?)
@@ -61,6 +65,10 @@ async fn list(State(state): State<Shared>) -> ApiResult {
     Ok(Json(
         serde_json::to_value(runs(&store).map_err(failure)?).map_err(failure)?,
     ))
+}
+async fn workspace(State(state): State<Shared>) -> ApiResult {
+    let store = state.lock().await;
+    Ok(Json(json!({"path":store.root.to_string_lossy()})))
 }
 async fn detail(State(state): State<Shared>, Path(id): Path<String>) -> ApiResult {
     let store = state.lock().await;
@@ -81,13 +89,47 @@ async fn step(State(state): State<Shared>, Path((id, n)): Path<(String, u32)>) -
         .into_iter()
         .find(|s| s.index == n)
         .ok_or_else(missing)?;
+    let before = store.manifest(&step.pre_snapshot_id).map_err(failure)?;
+    let after = store.manifest(&step.post_snapshot_id).map_err(failure)?;
+    let diffs = inspect::file_diffs(&store, &step)
+        .map_err(failure)?
+        .into_iter()
+        .map(|file| {
+            let added = file
+                .hunks
+                .iter()
+                .flat_map(|h| &h.lines)
+                .filter(|l| l.kind == "insert")
+                .count();
+            let deleted = file
+                .hunks
+                .iter()
+                .flat_map(|h| &h.lines)
+                .filter(|l| l.kind == "delete")
+                .count();
+            let change = if !before.contains_key(&file.path) {
+                "A"
+            } else if !after.contains_key(&file.path) {
+                "D"
+            } else {
+                "M"
+            };
+            let mut value = serde_json::to_value(file)?;
+            value["change"] = json!(change);
+            value["added_lines"] = json!(added);
+            value["deleted_lines"] = json!(deleted);
+            Ok(value)
+        })
+        .collect::<std::result::Result<Vec<_>, serde_json::Error>>()
+        .map_err(failure)?;
     Ok(Json(
-        json!({"step_index":step.index,"diffs":inspect::file_diffs(&store,&step).map_err(failure)?,"summary":inspect::summary(&step),"request":step.request,"response":step.response}),
+        json!({"step_index":step.index,"diffs":diffs,"summary":inspect::summary(&step),"request":step.request,"response":step.response}),
     ))
 }
 pub fn router(store: Store) -> Router {
     Router::new()
         .route("/", get(|| async { Html(include_str!("ui.html")) }))
+        .route("/api/workspace", get(workspace))
         .route("/api/runs", get(list))
         .route("/api/runs/{id}", get(detail))
         .route("/api/runs/{id}/steps/{n}", get(step))
