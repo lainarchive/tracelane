@@ -51,3 +51,25 @@ fn empty_snapshot_restores_empty_tree() {
     store.restore(&empty).unwrap();
     assert!(!dir.path().join("added").exists());
 }
+
+#[test]
+fn restore_handles_file_directory_replacements() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = Store::open(dir.path()).unwrap();
+    fs::write(dir.path().join("entry"), "file").unwrap();
+    let snapshot = store.snapshot().unwrap();
+    fs::remove_file(dir.path().join("entry")).unwrap();
+    fs::create_dir_all(dir.path().join("entry/target")).unwrap();
+    fs::write(dir.path().join("entry/target/keep"), "ignored").unwrap();
+    assert!(store.restore(&snapshot).is_err());
+    assert_eq!(
+        fs::read_to_string(dir.path().join("entry/target/keep")).unwrap(),
+        "ignored"
+    );
+    fs::remove_dir_all(dir.path().join("entry/target")).unwrap();
+    store.restore(&snapshot).unwrap();
+    assert_eq!(
+        fs::read_to_string(dir.path().join("entry")).unwrap(),
+        "file"
+    );
+}
