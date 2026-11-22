@@ -1,4 +1,5 @@
 import { Component, Fragment, type ReactNode } from 'react';
+import { Wrench } from 'lucide-react';
 import type { StepDetail } from '@/lib/types';
 import { transcript, type Message } from '@/lib/transcript';
 
@@ -75,7 +76,10 @@ function MessageView({ message, subtitle }: { message: Message; subtitle?: strin
         } catch {}
         return (
           <div key={index} className="tool-call mono">
-            <span className="label">Tool call · {tool.name}</span>
+            <span className="label tool-call-head">
+              <Wrench size={12} aria-hidden="true" />
+              Tool call · {tool.name}
+            </span>
             <pre>{args}</pre>
           </div>
         );

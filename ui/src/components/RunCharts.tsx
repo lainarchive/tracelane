@@ -1,0 +1,300 @@
+import { useId } from 'react';
+import { motion, useReducedMotion } from 'motion/react';
+import { forkLanes, sparklinePath, waterfall } from '@/lib/charts';
+import type { Run, RunDetail, Step } from '@/lib/types';
+
+export function RunMetrics({ steps }: { steps: Step[] }) {
+  const counts = steps.reduce(
+    (sum, step) => ({
+      added: sum.added + step.files.added,
+      modified: sum.modified + step.files.modified,
+      deleted: sum.deleted + step.files.deleted,
+    }),
+    { added: 0, modified: 0, deleted: 0 },
+  );
+  const total = counts.added + counts.modified + counts.deleted;
+  return (
+    <div className="run-metrics">
+      <div>
+        <span className="label">Request latency</span>
+        <div className="metric-value">
+          <svg
+            width="72"
+            height="24"
+            viewBox="0 0 80 24"
+            role="img"
+            aria-label={`Per-step latencies: ${steps.map((s) => s.latency_ms).join(', ')} milliseconds`}
+          >
+            <path
+              d={sparklinePath(steps.map((s) => s.latency_ms))}
+              fill="none"
+              stroke="var(--selection)"
+              strokeWidth="1.5"
+            />
+            {steps.length === 1 && (
+              <circle cx="40" cy={steps[0].latency_ms > 0 ? 2 : 22} r="2" fill="var(--selection)" />
+            )}
+          </svg>
+          <strong className="mono">
+            {steps.reduce((n, s) => n + s.latency_ms, 0)}
+            <small>ms</small>
+          </strong>
+        </div>
+      </div>
+      <div>
+        <span className="label">File changes</span>
+        <div className="metric-value">
+          <svg
+            width="64"
+            height="14"
+            viewBox="0 0 100 14"
+            role="img"
+            aria-label={`${counts.added} added, ${counts.modified} modified, ${counts.deleted} deleted file changes across steps`}
+          >
+            <rect width="100" height="14" fill="var(--background)" rx="3" />
+            <rect
+              width={total ? (counts.added / total) * 100 : 0}
+              height="14"
+              fill="var(--green)"
+            />
+            <rect
+              x={total ? (counts.added / total) * 100 : 0}
+              width={total ? (counts.modified / total) * 100 : 0}
+              height="14"
+              fill="var(--amber)"
+            />
+            <rect
+              x={total ? ((counts.added + counts.modified) / total) * 100 : 0}
+              width={total ? (counts.deleted / total) * 100 : 0}
+              height="14"
+              fill="var(--red)"
+            />
+          </svg>
+          <strong
+            className="mono"
+            title="File changes summed across requests; a file can appear more than once"
+          >
+            {total}
+          </strong>
+        </div>
+        <span className="metric-breakdown mono">
+          <span className="added">+{counts.added}</span>{' '}
+          <span className="modified">~{counts.modified}</span>{' '}
+          <span className="deleted">-{counts.deleted}</span>
+        </span>
+      </div>
+    </div>
+  );
+}
+
+export function ForkGraph({
+  runs,
+  selected,
+  comfortable,
+}: {
+  runs: Run[];
+  selected: string | null;
+  comfortable: boolean;
+}) {
+  const rows = forkLanes(runs);
+  const height = comfortable ? 120 : 104;
+  const x = (lane: number) => 12 + lane * 14;
+  return (
+    <svg
+      className="fork-graph"
+      width={30 + Math.max(0, ...rows.map((r) => r.lane)) * 14}
+      height={rows.length * height}
+      aria-hidden="true"
+    >
+      {rows.map((row, i) => (
+        <g key={row.id}>
+          {row.parentRow !== null && (
+            <path
+              d={`M${x(rows[row.parentRow].lane)} ${row.parentRow * height + 23} V${i * height + 9} Q${x(rows[row.parentRow].lane)} ${i * height + 23} ${x(row.lane)} ${i * height + 23}`}
+              fill="none"
+              stroke="var(--selection)"
+              strokeWidth="1.5"
+              opacity="0.7"
+            />
+          )}
+          <circle
+            cx={x(row.lane)}
+            cy={i * height + 23}
+            r="3.5"
+            fill="var(--card)"
+            stroke={row.id === selected ? 'var(--selection)' : 'var(--muted-foreground)'}
+            strokeWidth="1.5"
+          />
+        </g>
+      ))}
+    </svg>
+  );
+}
+
+export function WaterfallBar({ steps, index }: { steps: Step[]; index: number }) {
+  const id = useId().replace(/:/g, '');
+  const reduced = useReducedMotion();
+  const chart = waterfall(steps.map((s) => s.latency_ms));
+  const span = chart.spans[index];
+  const start = (span.start / (chart.total || 1)) * 100;
+  const width = ((span.end - span.start) / (chart.total || 1)) * 100;
+  return (
+    <svg
+      className="waterfall-bar"
+      viewBox="0 0 100 8"
+      preserveAspectRatio="none"
+      aria-hidden="true"
+    >
+      <defs>
+        <pattern id={id} width="4" height="4" patternUnits="userSpaceOnUse">
+          <path
+            d="M-1 1 L1 -1 M0 4 L4 0 M3 5 L5 3"
+            stroke="var(--muted-foreground)"
+            strokeWidth="0.6"
+          />
+        </pattern>
+      </defs>
+      <path d="M0 4 H100 M50 0 V8" stroke="var(--border)" strokeWidth="0.5" />
+      <motion.rect
+        x={Math.min(start, 99)}
+        y="1"
+        height="6"
+        rx="0.8"
+        fill={steps[index].cached ? `url(#${id})` : 'var(--selection)'}
+        initial={{ width: reduced ? Math.max(2, width) : 0 }}
+        animate={{ width: Math.max(2, width) }}
+        transition={{ duration: reduced ? 0 : 0.2 }}
+      />
+    </svg>
+  );
+}
+
+export function MetroTimeline({
+  current,
+  related,
+  selectedStep,
+  onSelect,
+}: {
+  current: RunDetail | null;
+  related: RunDetail[];
+  selectedStep: number | null;
+  onSelect: (run: string, step?: number) => void;
+}) {
+  if (!current?.steps.length)
+    return (
+      <div className="metro-empty muted">
+        Request timeline · {current ? 'No requests recorded' : 'Select a run'}
+      </div>
+    );
+  const parent = related.find((item) => item.run.id === current.run.parent_run_id) ?? current;
+  const branches =
+    parent === current
+      ? related.filter((item) => item.run.parent_run_id === current.run.id)
+      : [current];
+  const main = waterfall(parent.steps.map((s) => s.latency_ms));
+  const tracks = branches.map((branch) => {
+    const fork = parent.steps.findIndex((s) => s.step_index === branch.run.forked_from_step);
+    const base = main.spans[Math.max(0, fork)]?.start ?? 0;
+    const steps = branch.steps.filter((s) => s.step_index >= (branch.run.forked_from_step ?? 1));
+    return { branch, base, steps, time: waterfall(steps.map((s) => s.latency_ms)) };
+  });
+  const total = Math.max(main.total, ...tracks.map((t) => t.base + t.time.total), 0);
+  const x = (value: number) => 100 + (value / (total || 1)) * 1020;
+  const height = Math.max(88, 68 + tracks.length * 32);
+  function node(run: RunDetail, step: Step, position: number, y: number, cached = step.cached) {
+    const selected = run.run.id === current!.run.id && step.step_index === selectedStep;
+    return (
+      <g
+        key={step.step_index}
+        role="button"
+        tabIndex={0}
+        aria-label={`Select ${run.run.id} step ${step.step_index}`}
+        onClick={() => onSelect(run.run.id, step.step_index)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            onSelect(run.run.id, step.step_index);
+          }
+        }}
+        className={`metro-node ${selected ? 'selected' : ''}`}
+      >
+        <title>
+          {run.run.id} · step {step.step_index} · {cached ? 'cached' : `${step.latency_ms} ms`}
+        </title>
+        <rect
+          x={x(position) - 36}
+          y={y - 8}
+          width="72"
+          height="30"
+          fill="transparent"
+          pointerEvents="all"
+        />
+        <circle
+          cx={x(position)}
+          cy={y}
+          r={selected ? 7 : 5}
+          fill={cached ? 'var(--background)' : 'var(--live)'}
+          stroke={selected ? 'var(--foreground)' : 'var(--live)'}
+          strokeWidth="2"
+        />
+        <text x={x(position)} y={y + 18} textAnchor="middle">
+          {step.step_index} · {cached ? 'cached' : `${step.latency_ms}ms`}
+        </text>
+      </g>
+    );
+  }
+  return (
+    <section className="metro-band scroll" aria-label="Run request timeline">
+      <svg
+        viewBox={`0 0 1200 ${height}`}
+        style={{ height }}
+        role="group"
+        aria-label="Cumulative request latency timeline"
+      >
+        {(total ? [0, 0.25, 0.5, 0.75, 1] : [0]).map((tick) => (
+          <g key={tick}>
+            <path d={`M${x(tick * total)} 20 V${height}`} stroke="var(--border)" />
+            <text x={x(tick * total)} y="14" textAnchor="middle">
+              {Math.round(tick * total)}ms
+            </text>
+          </g>
+        ))}
+        <text x="16" y="14">
+          Σ latency
+        </text>
+        <text x="16" y="40">
+          {parent.run.id.slice(0, 8)}
+        </text>
+        <path d={`M100 36 H1120`} stroke="var(--input)" strokeWidth="2" />
+        {parent.steps.map((step, index) => node(parent, step, main.spans[index].end, 36))}
+        {tracks.map(({ branch, base, steps, time }, index) => {
+          const y = 68 + index * 32;
+          return (
+            <g key={branch.run.id}>
+              <text x="16" y={y + 3} className="metro-fork-label">
+                fork {branch.run.id.slice(0, 6)} @{branch.run.forked_from_step}
+              </text>
+              <path
+                d={`M${x(base)} 36 Q${x(base)} ${y} ${x(base) + 16} ${y} H${x(base + time.total)}`}
+                stroke="var(--selection)"
+                strokeWidth="1.5"
+                fill="none"
+              />
+              {branch.steps
+                .filter(
+                  (step) => step.cached && step.step_index < (branch.run.forked_from_step ?? 1),
+                )
+                .map((step) => {
+                  const parentIndex = parent.steps.findIndex(
+                    (original) => original.step_index === step.step_index,
+                  );
+                  return node(branch, step, main.spans[parentIndex]?.end ?? base, y);
+                })}
+              {steps.map((step, i) => node(branch, step, base + time.spans[i].end, y))}
+            </g>
+          );
+        })}
+      </svg>
+    </section>
+  );
+}

@@ -76,6 +76,7 @@
   --subtle: rgba(0, 0, 0, 0.025);
   --hover: rgba(0, 0, 0, 0.035);
   --scrollbar: #cbd5e1;
+  --live: #0d9488;
 }
 .dark {
   color-scheme: dark;
@@ -96,6 +97,7 @@
   --subtle: rgba(255, 255, 255, 0.015);
   --hover: rgba(255, 255, 255, 0.035);
   --scrollbar: #374151;
+  --live: #4bb9ac;
 }
 @layer base {
   * {
