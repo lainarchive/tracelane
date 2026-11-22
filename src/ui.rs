@@ -160,7 +160,7 @@ async fn step(State(state): State<Shared>, Path((id, n)): Path<(String, u32)>) -
 }
 pub fn router(store: Store) -> Router {
     Router::new()
-        .route("/", get(|| async { Html(include_str!("ui.html")) }))
+        .route("/", get(|| async { Html(include_str!("ui/index.html")) }))
         .route("/api/workspace", get(workspace))
         .route("/api/runs", get(list))
         .route("/api/runs/{id}", get(detail))

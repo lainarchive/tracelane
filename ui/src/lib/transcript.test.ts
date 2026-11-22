@@ -1,0 +1,304 @@
+import assert from 'node:assert/strict';
+import { test } from 'vitest';
+import { transcript } from './transcript';
+const parse = transcript;
+
+test('OpenAI messages, tool calls, assistant text and usage are retained', () => {
+  const value = parse(
+    {
+      model: 'requested',
+      messages: [
+        { role: 'system', content: 'Be concise.' },
+        { role: 'user', content: [{ type: 'text', text: 'Read this.' }, { type: 'image_url' }] },
+        {
+          role: 'assistant',
+          content: null,
+          tool_calls: [{ function: { name: 'read', arguments: '{"path":"a"}' } }],
+        },
+        { role: 'tool', content: 'contents' },
+      ],
+    },
+    {
+      model: 'returned',
+      choices: [{ message: { content: 'Done.' }, finish_reason: 'stop' }],
+      usage: { prompt_tokens: 10, completion_tokens: 4 },
+    },
+  );
+  assert.equal(value.messages[0].role, 'system');
+  assert.equal(value.messages[1].text, 'Read this.\n[image_url]');
+  assert.equal(value.messages[2].tools[0].name, 'read');
+  assert.equal(value.messages[3].role, 'tool');
+  assert.equal(value.response.text, 'Done.');
+  assert.equal(value.model, 'returned');
+  assert.equal(value.finish, 'stop');
+  assert.equal(value.usage.prompt_tokens, 10);
+});
+
+test('Anthropic system, text blocks, tool results and usage are retained', () => {
+  const value = parse(
+    {
+      system: [{ type: 'text', text: 'System prompt' }],
+      messages: [
+        { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'one', content: 'result' }] },
+      ],
+    },
+    {
+      model: 'claude',
+      content: [
+        { type: 'text', text: 'First' },
+        { type: 'text', text: 'Second' },
+        { type: 'tool_use', name: 'write', input: { path: 'a' } },
+      ],
+      stop_reason: 'tool_use',
+      usage: { input_tokens: 8, output_tokens: 3 },
+    },
+  );
+  assert.equal(value.messages[0].text, 'System prompt');
+  assert.ok(value.messages[1].text.includes('result'));
+  assert.equal(value.response.text, 'First\nSecond');
+  assert.equal(value.response.tools[0].name, 'write');
+  assert.equal(value.finish, 'tool_use');
+  assert.equal(value.usage.output_tokens, 3);
+});
+
+test('OpenAI SSE joins deltas and tool arguments with final finish and usage events', () => {
+  const chunks = [
+    {
+      model: 'streamed',
+      choices: [
+        {
+          delta: {
+            content: 'Hel',
+            tool_calls: [{ index: 0, function: { name: 'read', arguments: '{"pa' } }],
+          },
+        },
+      ],
+    },
+    {
+      choices: [
+        {
+          delta: { content: 'lo', tool_calls: [{ index: 0, function: { arguments: 'th":"a"}' } }] },
+          finish_reason: 'stop',
+        },
+      ],
+    },
+    { choices: [], usage: { total_tokens: 12 } },
+  ];
+  const stream =
+    chunks.map((chunk) => 'data: ' + JSON.stringify(chunk)).join('\r\n\r\n') +
+    '\r\n\r\ndata: [DONE]\r\n\r\n';
+  const value = parse({}, stream);
+  assert.equal(value.response.text, 'Hello');
+  assert.equal(value.response.tools[0].arguments, '{"path":"a"}');
+  assert.equal(value.model, 'streamed');
+  assert.equal(value.finish, 'stop');
+  assert.equal(value.usage.total_tokens, 12);
+});
+
+test('Anthropic SSE joins text and final metadata', () => {
+  const events = [
+    { type: 'message_start', message: { model: 'streamed-claude', usage: { input_tokens: 5 } } },
+    { type: 'content_block_delta', delta: { type: 'text_delta', text: 'Hello ' } },
+    { type: 'content_block_delta', delta: { type: 'text_delta', text: 'world' } },
+    { type: 'message_delta', delta: { stop_reason: 'end_turn' }, usage: { output_tokens: 2 } },
+  ];
+  const value = parse(
+    {},
+    events
+      .map((event) => 'event: ' + event.type + '\ndata: ' + JSON.stringify(event) + '\n\n')
+      .join(''),
+  );
+  assert.equal(value.response.text, 'Hello world');
+  assert.equal(value.finish, 'end_turn');
+  assert.equal(value.usage.input_tokens, 5);
+  assert.equal(value.usage.output_tokens, 2);
+});
+
+test('OpenAI SSE selects choice zero even when alternatives arrive first or alone', () => {
+  const chunks = [
+    {
+      choices: [
+        {
+          index: 1,
+          delta: { content: 'Wrong', tool_calls: [{ index: 0, function: { name: 'wrong' } }] },
+        },
+      ],
+    },
+    {
+      choices: [
+        { index: 1, delta: { content: 'Wrong again' } },
+        { index: 0, delta: { content: 'Hel' } },
+      ],
+    },
+    {
+      choices: [
+        { index: 0, delta: { content: 'lo' }, finish_reason: 'stop' },
+        { index: 1, finish_reason: 'length' },
+      ],
+    },
+    { choices: [{ index: 1, delta: { content: 'Still wrong' }, finish_reason: 'length' }] },
+  ];
+  const stream = chunks.map((chunk) => 'data: ' + JSON.stringify(chunk) + '\n\n').join('');
+  const value = parse({}, stream);
+  assert.equal(value.response.text, 'Hello');
+  assert.equal(value.finish, 'stop');
+  assert.deepEqual(value.response.tools, []);
+});
+
+test('empty, plain-text, error and malformed stream responses remain inspectable', () => {
+  assert.equal(parse({}, null).response.text, 'No assistant text returned.');
+  assert.equal(parse({}, 'plain text').response.text, 'plain text');
+  assert.ok(
+    parse({}, { error: { message: 'Not authorized' } }).response.text.includes('Not authorized'),
+  );
+  const broken = parse({}, 'data: not-json\n\ndata: [DONE]\n\n');
+  assert.ok(broken.warning);
+  assert.equal(broken.response.text, 'No assistant text returned.');
+  assert.ok(parse({}, 'data: null\n\n').warning);
+});
+
+test('malformed content blocks and tool calls do not discard valid transcript text', () => {
+  const value = parse(
+    {
+      messages: [
+        null,
+        {
+          role: 'user',
+          content: [null, 7, false, { type: 'text', text: 'Keep this' }],
+          tool_calls: [null, 8],
+        },
+      ],
+    },
+    { content: [null, { type: 'text', text: 'Answer' }] },
+  );
+  assert.equal(value.messages[1].text, 'Keep this');
+  assert.deepEqual(value.messages[1].tools, []);
+  assert.equal(value.response.text, 'Answer');
+});
+
+test('Responses API renders instructions, string or message inputs and output text', () => {
+  const output = {
+    model: 'responses-model',
+    status: 'completed',
+    output: [
+      { type: 'reasoning' },
+      {
+        type: 'message',
+        role: 'assistant',
+        content: [{ type: 'output_text', text: 'The answer.' }],
+      },
+    ],
+    usage: { input_tokens: 8, output_tokens: 3 },
+  };
+  const value = parse({ instructions: 'Be brief.', input: 'Question?' }, output);
+  assert.deepEqual(
+    value.messages.map((message) => [message.role, message.text]),
+    [
+      ['system', 'Be brief.'],
+      ['user', 'Question?'],
+    ],
+  );
+  assert.equal(value.response.text, 'The answer.');
+  assert.equal(value.model, 'responses-model');
+  assert.equal(value.finish, 'completed');
+  assert.equal(value.usage.output_tokens, 3);
+  const items = parse(
+    {
+      input: [
+        null,
+        { role: 'user', content: [{ type: 'input_text', text: 'First' }] },
+        { type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'Second' }] },
+      ],
+    },
+    { output: [] },
+  );
+  assert.deepEqual(
+    items.messages.map((message) => message.text),
+    ['First', 'Second'],
+  );
+  assert.equal(items.response.text, 'No assistant text returned.');
+});
+
+test('Responses SSE joins output text deltas and completion metadata without duplicating final output', () => {
+  const events = [
+    { type: 'response.created', response: { model: 'streamed-responses' } },
+    { type: 'response.output_text.delta', delta: 'Hel' },
+    { type: 'response.output_text.delta', delta: 'lo' },
+    { type: 'response.output_text.done', text: 'Hello' },
+    {
+      type: 'response.completed',
+      response: {
+        status: 'completed',
+        output: [{ content: [{ type: 'output_text', text: 'Hello' }] }],
+        usage: { total_tokens: 9 },
+      },
+    },
+  ];
+  const value = parse(
+    { input: 'Question?' },
+    events
+      .map((event) => 'event: ' + event.type + '\ndata: ' + JSON.stringify(event) + '\n\n')
+      .join(''),
+  );
+  assert.equal(value.response.text, 'Hello');
+  assert.equal(value.model, 'streamed-responses');
+  assert.equal(value.finish, 'completed');
+  assert.equal(value.usage.total_tokens, 9);
+});
+
+test('stored content types distinguish literal data lines from SSE with a legacy fallback', () => {
+  const body = 'Notes\ndata: {"choices":[{"delta":{"content":"not prose"}}]}\n\n';
+  const plain = parse({}, body, 'text/plain; charset=utf-8');
+  assert.equal(plain.response.text, body);
+  assert.equal(plain.warning, '');
+  const stream = 'data: {"choices":[{"delta":{"content":"streamed"}}]}\n\n';
+  assert.equal(parse({}, stream, 'Text/Event-Stream; charset=utf-8').response.text, 'streamed');
+  assert.equal(parse({}, stream).response.text, 'streamed');
+  assert.equal(parse({}, stream, null).response.text, 'streamed');
+  assert.equal(parse({}, stream, 'application/json').response.text, stream);
+  assert.ok(parse({}, 'data: broken\n\n', 'text/event-stream').warning);
+  assert.equal(parse({}, '', 'text/event-stream').response.text, 'No assistant text returned.');
+});
+
+test('Responses function calls render as tools alongside optional text', () => {
+  const call = { type: 'function_call', name: 'read_file', arguments: '{"path":"src/lib.rs"}' };
+  const onlyTools = parse({}, { output: [null, call] });
+  assert.equal(onlyTools.response.text, '');
+  assert.deepEqual(onlyTools.response.tools, [
+    { name: 'read_file', arguments: '{"path":"src/lib.rs"}' },
+  ]);
+  const mixed = parse(
+    {},
+    {
+      output: [{ type: 'message', content: [{ type: 'output_text', text: 'Reading now.' }] }, call],
+    },
+  );
+  assert.equal(mixed.response.text, 'Reading now.');
+  assert.equal(mixed.response.tools[0].name, 'read_file');
+  assert.deepEqual(parse({}, { output: [] }).response.tools, []);
+  assert.deepEqual(parse({}, { output: [null, { type: 'function_call' }] }).response.tools, [
+    { name: 'tool', arguments: '' },
+  ]);
+});
+
+test('refusal content blocks preserve their explanation and ignore missing text', () => {
+  const refusal = { type: 'refusal', refusal: 'I cannot help with that request.' };
+  const value = parse(
+    { messages: [{ role: 'assistant', content: [null, refusal] }] },
+    { output: [{ type: 'message', content: [refusal] }] },
+  );
+  assert.equal(value.messages[0].text, refusal.refusal);
+  assert.equal(value.response.text, refusal.refusal);
+  const chat = parse(
+    {},
+    { choices: [{ message: { content: [{ type: 'text', text: 'Explanation:' }, refusal] } }] },
+  );
+  assert.equal(chat.response.text, 'Explanation:\n' + refusal.refusal);
+  for (const block of [
+    { type: 'refusal', refusal: '' },
+    { type: 'refusal', refusal: 7 },
+    { type: 'refusal' },
+  ]) {
+    assert.equal(parse({}, { content: [block] }).response.text.includes('[refusal]'), false);
+  }
+});

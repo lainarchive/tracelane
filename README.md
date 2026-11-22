@@ -78,6 +78,26 @@ Open `http://127.0.0.1:7480`. The sidebar groups forks under their parents. Sele
 
 ![Trace inspector showing a fork, a cached first step, and a multiline Rust diff](docs/ui.png)
 
+## Developing the inspector
+
+The React inspector lives in `ui/` (TypeScript, Vite, Tailwind and shadcn/ui).
+Use Node 22.13 or newer and npm:
+
+```bash
+cd ui
+npm ci
+npm run build
+npx vitest run
+```
+
+The build writes one self-contained `src/ui/index.html`. Commit it with frontend
+changes; ordinary `cargo build` embeds this file and does not need Node. For local
+development, run `tracelane ui` in a recorded workspace and `npm run dev` in `ui/`.
+Vite forwards `/api` to `127.0.0.1:7480`; all fonts, scripts and styles are local.
+
+Open the gear menu (or press `,`) for theme, density, diff wrapping, timestamps
+and selection accent. Settings and pane sizes are saved in the browser.
+
 ## How it works
 
 The current directory is the workspace. Tracelane binds its proxy to localhost and forwards request methods, paths, query strings, bodies, and headers to the upstream, excluding transport headers such as `Host` and `Content-Length`.
