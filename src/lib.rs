@@ -1,3 +1,5 @@
+#[cfg(feature = "desktop")]
+pub mod desktop;
 pub mod inspect;
 pub mod output;
 pub mod proxy;

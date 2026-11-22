@@ -6,6 +6,9 @@ Record model HTTP requests with workspace snapshots, inspect file diffs, and rep
 
 You need a Rust toolchain and a C compiler for bundled SQLite.
 
+Linux native windows require GTK 3 and WebKitGTK 4.1 at runtime (`libgtk-3-0 libwebkit2gtk-4.1-0` on Ubuntu).
+For Linux builds, install `libgtk-3-dev libwebkit2gtk-4.1-dev pkg-config`. Build a browser-only CLI with `cargo install --path . --no-default-features` to skip these dependencies.
+
 ```bash
 git clone https://github.com/lainarchive/tracelane.git
 cd tracelane
@@ -71,10 +74,13 @@ Replay overwrites modified files and deletes non-ignored files absent from the s
 ### UI
 
 ```bash
-tracelane ui --port 7480
+tracelane ui
+tracelane ui --browser --port 7480
 ```
 
-Open `http://127.0.0.1:7480`. The sidebar groups forks under their parents. Select a step to see file diffs and model I/O; use `j` and `k` to move between steps, or toggle Raw JSON for full payloads. The URL hash keeps the selected run and step across reloads. All assets are embedded in the binary.
+By default, the `desktop` feature opens a native OS webview (not Electron) backed by an in-process server on a random loopback port. Closing the window shuts down the server. `--port` overrides the port; `--browser` prints the URL and serves until Ctrl-C, defaulting to port 7480. Builds with `--no-default-features` always use this browser-only behavior. Select a step to see file diffs and model I/O; use `j` and `k` to move between steps, or toggle Raw JSON for full payloads. The URL hash keeps the selected run and step across reloads. All assets are embedded in the binary.
+
+Random native ports have separate browser-storage origins; pass a fixed `--port` to keep the same origin across launches.
 
 ![Trace inspector showing a fork, a cached first step, and a multiline Rust diff](docs/ui.png)
 
@@ -92,7 +98,7 @@ npx vitest run
 
 The build writes one self-contained `src/ui/index.html`. Commit it with frontend
 changes; ordinary `cargo build` embeds this file and does not need Node. For local
-development, run `tracelane ui` in a recorded workspace and `npm run dev` in `ui/`.
+development, run `tracelane ui --browser` in a recorded workspace and `npm run dev` in `ui/`.
 Vite forwards `/api` to `127.0.0.1:7480`; all fonts, scripts and styles are local.
 
 Open the gear menu (or press `,`) for theme, density, diff wrapping, timestamps
