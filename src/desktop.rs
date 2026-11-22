@@ -9,16 +9,17 @@ use tao::{
 };
 use wry::WebViewBuilder;
 
+const PROTOCOL_ORIGIN: &str = "tracelane://localhost/";
 #[cfg(target_os = "windows")]
 const ORIGIN: &str = "http://tracelane.localhost/";
 #[cfg(not(target_os = "windows"))]
-const ORIGIN: &str = "tracelane://localhost/";
+const ORIGIN: &str = PROTOCOL_ORIGIN;
 
 async fn protocol_response(
     addr: SocketAddr,
     request: wry::http::Request<Vec<u8>>,
 ) -> wry::http::Response<Vec<u8>> {
-    let origin: wry::http::Uri = ORIGIN.parse().unwrap();
+    let origin: wry::http::Uri = PROTOCOL_ORIGIN.parse().unwrap();
     if request.uri().scheme() != origin.scheme() || request.uri().authority() != origin.authority()
     {
         return wry::http::Response::builder()
@@ -134,7 +135,7 @@ mod tests {
             let response = protocol_response(
                 server.addr,
                 wry::http::Request::builder()
-                    .uri(format!("{ORIGIN}{}", &path[1..]))
+                    .uri(format!("{PROTOCOL_ORIGIN}{}", &path[1..]))
                     .body(Vec::new())
                     .unwrap(),
             )
@@ -161,6 +162,7 @@ mod tests {
         let addr = server.addr;
         for uri in [
             "https://example.com/api/runs",
+            "http://tracelane.localhost/api/runs",
             "tracelane://localhost.evil/api/runs",
         ] {
             let response = protocol_response(
@@ -177,7 +179,7 @@ mod tests {
         let response = protocol_response(
             addr,
             wry::http::Request::builder()
-                .uri(ORIGIN)
+                .uri(PROTOCOL_ORIGIN)
                 .body(Vec::new())
                 .unwrap(),
         )
