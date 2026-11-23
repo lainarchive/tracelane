@@ -1,21 +1,28 @@
-<h1 align="center">Tracelane</h1>
-<p align="center">Record model requests and file changes, then replay from a chosen step.</p>
-<p align="center">
-  <img src="docs/ui.png" alt="Tracelane showing a forked run, its cached first step, a Rust diff and model conversation" width="1200">
-</p>
+# Tracelane
 
-## Why
+![la.02: Tracelane, a forked silver casting on black](docs/cover.png)
 
-An agent run can go wrong several requests before you notice. A transcript often leaves you without the files from that point. Tracelane keeps snapshots around each request, so you can check the diff and restart from that state.
+Tracelane records an agent's model requests and snapshots its workspace around each request. Open a run to see what the model received, what it sent back, and which files changed. Replay from the request you want to retry.
+
+[Install](#install) · [Try it without an API key](#demo) · [Replay a run](#replay-a-run)
+
+![Tracelane showing a forked run, a cached request, a Rust diff and model conversation](docs/ui.png)
 
 Runs stay in the workspace's `.tracelane/` directory. The inspector reads that local data; it doesn't need an account or a hosted service.
 
-## Quick start
+## Install
 
-Install from Git with a current stable Rust toolchain and a C compiler for SQLite. Linux desktop builds also need the [GTK and WebKitGTK packages](#desktop-builds) below.
+Install with a current stable Rust toolchain and a C compiler for SQLite. This build needs no desktop libraries.
 
 ```bash
-cargo install --git https://github.com/lainarchive/tracelane
+cargo install --git https://github.com/lainarchive/tracelane --locked --no-default-features
+```
+
+For a native window, see [desktop builds](#desktop-builds).
+
+## Record a run
+
+```bash
 cd path/to/workspace
 ```
 
@@ -25,14 +32,16 @@ Replace `your-agent ...` with the command and arguments you normally run:
 tracelane record -- your-agent ...
 tracelane inspect <run-id>
 tracelane inspect <run-id> --step 2
-tracelane ui
+tracelane ui --browser
 ```
 
 The child must honor `OPENAI_BASE_URL` or `ANTHROPIC_BASE_URL` and send its own authentication headers. Record defaults to `https://api.openai.com`. Set `--target <url>` or `TRACELANE_UPSTREAM_URL` to use another upstream.
 
-To retry from the second request, rerun the child command:
+Open the URL printed by `tracelane ui --browser` to inspect the run.
 
-**Save unrecorded work first.** Replay restores the pre-request snapshot, overwriting edits and deleting newer non-ignored files.
+## Replay a run
+
+**Save unrecorded work first.** Replay restores the pre-request snapshot, overwriting edits and deleting newer non-ignored files. To retry from the second request:
 
 ```bash
 tracelane replay <run-id> --from-step 2 -- your-agent ...
@@ -59,7 +68,7 @@ Browser mode serves until Ctrl-C. The URL hash keeps the selected run and step a
 
 Demo music: “Music” by [underscores](https://underscores.bandcamp.com/track/music), excerpted from 0:37 and mixed. Interface sounds by [Kenney.nl](https://kenney.nl/assets/interface-sounds), [CC0](https://creativecommons.org/publicdomain/zero/1.0/).
 
-To try it without API keys:
+To try it without API keys, install the [Linux desktop build dependencies](#desktop-builds) first. The demo script builds the native inspector.
 
 ```bash
 git clone https://github.com/lainarchive/tracelane.git
@@ -123,13 +132,11 @@ sudo apt install libgtk-3-dev libwebkit2gtk-4.1-dev pkg-config
 
 Linux native windows need GTK 3 and WebKitGTK 4.1 at runtime (`libgtk-3-0 libwebkit2gtk-4.1-0` on Ubuntu). In a session without a display, use `--browser`.
 
-To skip desktop dependencies entirely:
+To install the native window build:
 
 ```bash
-cargo install --git https://github.com/lainarchive/tracelane --no-default-features
+cargo install --git https://github.com/lainarchive/tracelane --locked
 ```
-
-That build always uses browser mode, including for `tracelane ui`.
 
 ## Limits and data safety
 
