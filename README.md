@@ -10,7 +10,7 @@ Runs stay in the workspace's `.tracelane/` directory. The inspector reads that l
 
 ## Install
 
-Install with a current stable Rust toolchain and a C compiler for SQLite. This build opens the inspector in your browser and needs no desktop libraries.
+Install with a current stable Rust toolchain and a C compiler for SQLite. This build needs no desktop libraries.
 
 ```bash
 cargo install --git https://github.com/lainarchive/tracelane --locked --no-default-features
@@ -34,6 +34,8 @@ tracelane ui --browser
 ```
 
 The child must honor `OPENAI_BASE_URL` or `ANTHROPIC_BASE_URL` and send its own authentication headers. Record defaults to `https://api.openai.com`. Set `--target <url>` or `TRACELANE_UPSTREAM_URL` to use another upstream.
+
+Open the URL printed by `tracelane ui --browser` to inspect the run.
 
 ## Replay a run
 
