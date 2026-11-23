@@ -1,5 +1,7 @@
 # Tracelane
 
+![la.02: Tracelane, a forked silver casting on black](docs/cover.png)
+
 Tracelane records an agent's model requests and snapshots its workspace around each request. Open a run to see what the model received, what it sent back, and which files changed. Replay from the request you want to retry.
 
 [Install](#install) · [Try it without an API key](#demo) · [Replay a run](#replay-a-run)
