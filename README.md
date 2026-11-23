@@ -64,7 +64,7 @@ Browser mode serves until Ctrl-C. The URL hash keeps the selected run and step a
 
 Demo music: “Music” by [underscores](https://underscores.bandcamp.com/track/music), excerpted from 0:37 and mixed. Interface sounds by [Kenney.nl](https://kenney.nl/assets/interface-sounds), [CC0](https://creativecommons.org/publicdomain/zero/1.0/).
 
-To try it without API keys:
+To try it without API keys, install the [Linux desktop build dependencies](#desktop-builds) first. The demo script builds the native inspector.
 
 ```bash
 git clone https://github.com/lainarchive/tracelane.git
